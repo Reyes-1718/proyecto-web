@@ -12,40 +12,25 @@
 </head>
 <body>
 
-  <!-- ── Sección de login ── -->
+  <!-- ── Login ── -->
   <section id="login-section" class="login-section">
     <div class="login-card">
       <p class="login-pretitle">Panel Administrativo</p>
       <h1 class="login-title">Acceso Seguro</h1>
-
       <form id="login-form" novalidate>
         <div class="form-group">
           <label for="email">Email</label>
-          <input
-            type="email"
-            id="email"
-            required
-            maxlength="254"
-            placeholder="admin@ejemplo.com"
-            autocomplete="email"
-          >
+          <input type="email" id="email" required maxlength="254"
+            placeholder="admin@ejemplo.com" autocomplete="email">
         </div>
         <div class="form-group">
           <label for="password">Contraseña</label>
-          <input
-            type="password"
-            id="password"
-            required
-            minlength="6"
-            maxlength="128"
-            placeholder="••••••••"
-            autocomplete="current-password"
-          >
+          <input type="password" id="password" required minlength="6" maxlength="128"
+            placeholder="••••••••" autocomplete="current-password">
         </div>
         <p class="login-error" id="login-error" role="alert"></p>
         <button type="submit" class="btn-primary">Ingresar</button>
       </form>
-
       <a href="index.html" class="back-link">← Volver al sorteo</a>
     </div>
   </section>
@@ -59,9 +44,7 @@
         <p class="admin-subtitle">Rifa Digital 2025</p>
       </div>
       <div class="admin-header-right">
-        <span class="inactividad-badge" id="inactividad-badge" title="La sesión se cierra por inactividad">
-          Sesión activa
-        </span>
+        <span class="inactividad-badge">Sesión activa</span>
         <a href="index.html" class="btn-ghost" target="_blank">Ver grilla pública</a>
         <button id="logout-btn" class="btn-ghost danger">Cerrar sesión</button>
       </div>
@@ -79,57 +62,110 @@
           <span class="admin-stat-value" id="stats-disponibles">—</span>
           <span class="admin-stat-label">Disponibles</span>
         </div>
+        <div class="admin-stat-card highlight">
+          <span class="admin-stat-value" id="stats-pendientes">—</span>
+          <span class="admin-stat-label">Pendientes</span>
+        </div>
         <div class="admin-stat-card">
           <span class="admin-stat-value" id="stats-total">—</span>
           <span class="admin-stat-label">Total</span>
         </div>
       </div>
 
-      <!-- Gestión de número -->
-      <div class="admin-buscador">
-        <h2 class="section-title">Gestionar número</h2>
-        <input
-          type="number"
-          id="buscar-numero"
-          class="buscar-input"
-          placeholder="Ingresá un número"
-          min="1"
-          max="2000"
-        >
-        <div id="resultado-busqueda" class="resultado-busqueda"></div>
+      <!-- Tabs -->
+      <nav class="admin-tabs-nav">
+        <button class="tab-btn active" data-tab="numeros">Números</button>
+        <button class="tab-btn" data-tab="pendientes">
+          Pendientes
+          <span class="tab-badge hidden" id="badge-pendientes">0</span>
+        </button>
+        <button class="tab-btn" data-tab="vendedores">Vendedores</button>
+        <button class="tab-btn" data-tab="config">Configuración</button>
+      </nav>
+
+      <!-- ── Tab: Números ── -->
+      <div class="tab-panel" id="panel-numeros">
+        <div class="admin-buscador">
+          <h2 class="section-title">Gestionar número</h2>
+          <input type="number" id="buscar-numero" class="buscar-input"
+            placeholder="Ingresá un número" min="1" max="2000">
+          <div id="resultado-busqueda" class="resultado-busqueda"></div>
+        </div>
       </div>
 
-      <!-- Configuración del sorteo -->
-      <div class="admin-config">
-        <h2 class="section-title">Configuración del sorteo</h2>
-        <div class="config-row">
-          <label for="input-total">Total de boletos</label>
-          <div class="config-input-group">
-            <input
-              type="number"
-              id="input-total"
-              class="config-input"
-              min="1"
-              max="99999"
-              placeholder="2000"
-            >
-            <button id="btn-guardar-config" class="btn-primary btn-config">Guardar</button>
+      <!-- ── Tab: Pendientes ── -->
+      <div class="tab-panel hidden" id="panel-pendientes">
+        <div class="admin-buscador">
+          <h2 class="section-title">Boletos pendientes de aprobación</h2>
+          <div id="lista-pendientes" class="lista-pendientes">
+            <p class="no-data">Cargando...</p>
           </div>
-          <p class="config-help">Define la cantidad total de boletos del sorteo. La grilla pública se actualizará automáticamente.</p>
+        </div>
+      </div>
+
+      <!-- ── Tab: Vendedores ── -->
+      <div class="tab-panel hidden" id="panel-vendedores">
+        <div class="admin-buscador">
+          <div class="section-header-row">
+            <h2 class="section-title">Gestión de vendedores</h2>
+            <button id="btn-nuevo-vendedor" class="btn-primary btn-sm">+ Nuevo vendedor</button>
+          </div>
+          <div class="tabla-wrapper">
+            <table class="vendedores-tabla">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Contacto</th>
+                  <th>Estado</th>
+                  <th>Comisión</th>
+                  <th>Aprobación</th>
+                  <th>Vendidos</th>
+                  <th>Ganancias</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="vendedores-tbody">
+                <tr><td colspan="8" class="no-data">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Tab: Configuración ── -->
+      <div class="tab-panel hidden" id="panel-config">
+        <div class="admin-buscador">
+          <h2 class="section-title">Configuración del sorteo</h2>
+
+          <div class="config-grid">
+            <div class="config-row">
+              <label for="input-total">Total de boletos</label>
+              <div class="config-input-group">
+                <input type="number" id="input-total" class="config-input" min="1" max="99999" placeholder="2000">
+                <button id="btn-guardar-config" class="btn-primary btn-config">Guardar</button>
+              </div>
+              <p class="config-help">Cantidad total de boletos del sorteo.</p>
+            </div>
+
+            <div class="config-row">
+              <label for="input-precio">Precio por boleto</label>
+              <div class="config-input-group">
+                <input type="number" id="input-precio" class="config-input" min="0" step="0.01" placeholder="0.00">
+                <button id="btn-guardar-precio" class="btn-primary btn-config">Guardar</button>
+              </div>
+              <p class="config-help">Se usa para calcular las comisiones de vendedores.</p>
+            </div>
+          </div>
+
           <p class="config-status" id="config-status"></p>
         </div>
       </div>
 
     </main>
 
-    <!-- Modal de inactividad -->
-    <div
-      id="inactividad-overlay"
-      class="inactividad-overlay hidden"
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="inactividad-titulo"
-    >
+    <!-- Modal: Inactividad -->
+    <div id="inactividad-overlay" class="inactividad-overlay hidden"
+      role="alertdialog" aria-modal="true" aria-labelledby="inactividad-titulo">
       <div class="inactividad-modal">
         <p class="inactividad-icon">⏱</p>
         <h2 id="inactividad-titulo" class="inactividad-titulo">¿Seguís ahí?</h2>
@@ -138,6 +174,69 @@
           <strong id="inactividad-cuenta">60</strong> segundos por inactividad.
         </p>
         <button id="btn-mantener-sesion" class="btn-primary">Mantener sesión</button>
+      </div>
+    </div>
+
+    <!-- Modal: Nuevo / Editar vendedor -->
+    <div id="modal-vendedor" class="inactividad-overlay hidden"
+      role="dialog" aria-modal="true" aria-labelledby="modal-vendedor-titulo">
+      <div class="inactividad-modal modal-vendedor-card">
+        <h2 id="modal-vendedor-titulo" class="inactividad-titulo" id="titulo-modal-vendedor">Nuevo vendedor</h2>
+        <form id="form-vendedor" novalidate>
+
+          <div class="form-group">
+            <label for="v-nombre">Nombre</label>
+            <input type="text" id="v-nombre" required maxlength="80" placeholder="Nombre completo">
+          </div>
+          <div class="form-group">
+            <label for="v-contacto">Teléfono / Contacto</label>
+            <input type="text" id="v-contacto" maxlength="60" placeholder="Opcional">
+          </div>
+
+          <!-- Solo visible al crear, no al editar -->
+          <div id="campos-auth">
+            <div class="form-group">
+              <label for="v-email">Email</label>
+              <input type="email" id="v-email" maxlength="254" placeholder="vendedor@ejemplo.com" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label for="v-password">Contraseña temporal</label>
+              <input type="password" id="v-password" minlength="6" maxlength="128" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+            </div>
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="v-comision-tipo">Tipo de comisión</label>
+              <select id="v-comision-tipo" class="form-select">
+                <option value="porcentaje">Porcentaje (%)</option>
+                <option value="fija">Fija ($)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="v-comision-valor">Valor</label>
+              <input type="number" id="v-comision-valor" min="0" step="0.01" placeholder="0">
+            </div>
+          </div>
+
+          <div class="form-checks">
+            <label class="check-label">
+              <input type="checkbox" id="v-requiere-aprobacion" checked>
+              <span>Requiere aprobación del admin</span>
+            </label>
+            <label class="check-label">
+              <input type="checkbox" id="v-venta-directa">
+              <span>Puede vender directamente</span>
+            </label>
+          </div>
+
+          <p class="login-error" id="error-vendedor" role="alert"></p>
+
+          <div class="form-actions">
+            <button type="submit" class="btn-primary" id="btn-submit-vendedor">Crear vendedor</button>
+            <button type="button" id="btn-cancelar-vendedor" class="btn-ghost">Cancelar</button>
+          </div>
+        </form>
       </div>
     </div>
 

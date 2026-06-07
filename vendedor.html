@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal Vendedor — Rifa 2025</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Josefin+Sans:wght@300;400;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/admin.css">
+  <link rel="stylesheet" href="css/vendedor.css">
+</head>
+<body>
+
+  <!-- ── Login ── -->
+  <section id="login-section" class="login-section">
+    <div class="login-card">
+      <p class="login-pretitle">Portal de Vendedores</p>
+      <h1 class="login-title">Acceso Vendedor</h1>
+      <form id="login-form" novalidate>
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" required maxlength="254"
+            placeholder="vendedor@ejemplo.com" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label for="password">Contraseña</label>
+          <input type="password" id="password" required minlength="6" maxlength="128"
+            placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <p class="login-error" id="login-error" role="alert"></p>
+        <button type="submit" class="btn-primary">Ingresar</button>
+      </form>
+      <a href="index.html" class="back-link">← Volver al sorteo</a>
+    </div>
+  </section>
+
+  <!-- ── Panel vendedor ── -->
+  <section id="vendedor-section" class="admin-section hidden">
+
+    <header class="admin-header">
+      <div>
+        <h1 class="admin-title" id="v-nombre-display">Panel Vendedor</h1>
+        <p class="admin-subtitle">Rifa Digital 2025</p>
+      </div>
+      <div class="admin-header-right">
+        <a href="index.html" class="btn-ghost" target="_blank">Ver grilla pública</a>
+        <button id="logout-btn" class="btn-ghost danger">Cerrar sesión</button>
+      </div>
+    </header>
+
+    <main class="admin-main">
+
+      <!-- Stats del vendedor -->
+      <div class="admin-stats">
+        <div class="admin-stat-card highlight">
+          <span class="admin-stat-value" id="v-stats-pendientes">—</span>
+          <span class="admin-stat-label">Pendientes</span>
+        </div>
+        <div class="admin-stat-card">
+          <span class="admin-stat-value" id="v-stats-vendidos">—</span>
+          <span class="admin-stat-label">Vendidos</span>
+        </div>
+        <div class="admin-stat-card">
+          <span class="admin-stat-value" id="v-stats-ganancias">—</span>
+          <span class="admin-stat-label">Mi ganancia</span>
+        </div>
+      </div>
+
+      <!-- Reservar número -->
+      <div class="admin-buscador">
+        <h2 class="section-title">Reservar número</h2>
+        <input type="number" id="v-buscar-numero" class="buscar-input"
+          placeholder="Ingresá el número del boleto" min="1" max="2000">
+        <div id="v-resultado" class="resultado-busqueda"></div>
+      </div>
+
+      <!-- Mis boletos -->
+      <div class="admin-buscador v-mis-boletos-section">
+        <h2 class="section-title">Mis boletos</h2>
+        <div id="v-lista-boletos" class="lista-pendientes">
+          <p class="no-data">Cargando...</p>
+        </div>
+      </div>
+
+    </main>
+  </section>
+
+  <script type="module" src="js/vendedor.js"></script>
+</body>
+</html>

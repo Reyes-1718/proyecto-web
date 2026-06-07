@@ -15,3 +15,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
+
+// App secundaria: crea cuentas de vendedor sin cerrar la sesión del admin
+const appSecundaria = initializeApp(firebaseConfig, 'secondary');
+export const authSecundaria = getAuth(appSecundaria);

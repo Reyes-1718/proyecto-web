@@ -24,6 +24,11 @@ const btnDisponibles   = document.getElementById('filtro-disponibles');
 const btnTodos         = document.getElementById('filtro-todos');
 const infoGrilla       = document.getElementById('info-grilla');
 
+// reservado, pendiente_aprobacion y cancelado se muestran como no disponibles al público
+function estaDisponible(estado) {
+  return estado === 'disponible';
+}
+
 // Crea el contenedor de la grilla una sola vez
 function getOrCreateGrid() {
   if (!gridDiv) {
@@ -31,10 +36,9 @@ function getOrCreateGrid() {
     gridDiv = document.createElement('div');
     gridDiv.className = 'numeros-grid';
     gridDiv.id = 'numeros-grid';
-    // Delegación de eventos: un solo listener para toda la grilla
     gridDiv.addEventListener('click', (e) => {
       const cell = e.target.closest('.numero-cell');
-      if (!cell || cell.classList.contains('vendido')) return;
+      if (!cell || !cell.classList.contains('disponible')) return;
       abrirModal(Number(cell.dataset.numero));
     });
     gridContainer.appendChild(gridDiv);
@@ -45,23 +49,24 @@ function getOrCreateGrid() {
 // Crea un elemento <button> para un número dado
 function crearCelda(num, animIdx = 0) {
   const id = String(num);
-  const estado = estadoMap.get(id) || 'disponible';
+  const estadoReal   = estadoMap.get(id) || 'disponible';
+  const estadoVisual = estaDisponible(estadoReal) ? 'disponible' : 'vendido';
+
   const cell = document.createElement('button');
   cell.id = `num-${num}`;
-  cell.className = `numero-cell ${estado}`;
-  cell.textContent = String(num); // sin zeros a la izquierda
+  cell.className = `numero-cell ${estadoVisual}`;
+  cell.textContent = String(num);
   cell.dataset.numero = id;
-  if (estado === 'vendido') cell.disabled = true;
-  // Animación escalonada por lotes de 25
+  if (!estaDisponible(estadoReal)) cell.disabled = true;
   cell.style.animationDelay = `${Math.floor(animIdx / 25) * 20}ms`;
   return cell;
 }
 
-// Devuelve array con los números disponibles en orden
+// Devuelve array con los números estrictamente disponibles
 function getDisponiblesArray() {
   const arr = [];
   for (let i = 1; i <= TOTAL; i++) {
-    if (estadoMap.get(String(i)) !== 'vendido') arr.push(i);
+    if (estaDisponible(estadoMap.get(String(i)))) arr.push(i);
   }
   return arr;
 }
@@ -84,7 +89,7 @@ function renderizarDisponibles() {
   actualizarInfoDisponibles(disponibles.length, limite);
 }
 
-// Renderiza los 2000 números con sus estados actuales
+// Renderiza todos los números con sus estados actuales
 function renderizarTodos() {
   const grid = getOrCreateGrid();
   const fragment = document.createDocumentFragment();
@@ -103,14 +108,14 @@ function actualizarCeldaTodos(id) {
   const cell = document.getElementById(`num-${id}`);
   if (!cell) return;
 
-  const estado = estadoMap.get(id) || 'disponible';
-  const eraVendido = cell.classList.contains('vendido');
-  const esVendido = estado === 'vendido';
-  if (eraVendido === esVendido) return;
+  const estadoReal    = estadoMap.get(id) || 'disponible';
+  const eraDisponible = cell.classList.contains('disponible');
+  const esDisponible  = estaDisponible(estadoReal);
+  if (eraDisponible === esDisponible) return;
 
-  cell.className = `numero-cell ${estado}`;
-  cell.disabled = esVendido;
-  if (esVendido) {
+  cell.className = `numero-cell ${esDisponible ? 'disponible' : 'vendido'}`;
+  cell.disabled = !esDisponible;
+  if (!esDisponible) {
     cell.classList.add('recien-vendido');
     setTimeout(() => cell.classList.remove('recien-vendido'), 700);
   }
@@ -126,7 +131,6 @@ function actualizarInfoDisponibles(total, limite) {
   }
 
   const texto = `<p class="info-texto">Mostrando <strong>${limite}</strong> de <strong>${total}</strong> disponibles.</p>`;
-
   const boton = (total > 100 && !mostrarTodosDisponibles)
     ? `<button class="btn-ver-mas" id="btn-ver-mas">Ver todos los disponibles (${total})</button>`
     : '';
@@ -141,10 +145,10 @@ function actualizarInfoDisponibles(total, limite) {
 
 // Actualiza los contadores del header
 function actualizarContadores() {
-  let vendidos = 0;
-  estadoMap.forEach((v) => { if (v === 'vendido') vendidos++; });
-  vendidosCount.textContent = vendidos;
-  disponiblesCount.textContent = TOTAL - vendidos;
+  let tomados = 0;
+  estadoMap.forEach((v) => { if (!estaDisponible(v)) tomados++; });
+  vendidosCount.textContent    = tomados;
+  disponiblesCount.textContent = TOTAL - tomados;
 }
 
 // Modal
@@ -211,7 +215,7 @@ async function iniciarEscucha() {
         ? 'disponible'
         : (change.doc.data().estado || 'disponible');
 
-      if (estadoMap.get(id) === nuevoEstado) return; // sin cambio real
+      if (estadoMap.get(id) === nuevoEstado) return;
 
       estadoMap.set(id, nuevoEstado);
       if (modoVista === 'todos') actualizarCeldaTodos(id);

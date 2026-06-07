@@ -1,0 +1,318 @@
+import { db, auth } from './firebase.js';
+import { iniciarSesion, cerrarSesion, escucharAuth } from './auth.js';
+import {
+  collection, doc, getDoc, setDoc, updateDoc,
+  onSnapshot, query, where, serverTimestamp, runTransaction, increment
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+// ── DOM refs ──────────────────────────────────────
+const loginSection      = document.getElementById('login-section');
+const vendedorSection   = document.getElementById('vendedor-section');
+const loginForm         = document.getElementById('login-form');
+const loginError        = document.getElementById('login-error');
+const logoutBtn         = document.getElementById('logout-btn');
+const vNombreDisplay    = document.getElementById('v-nombre-display');
+const vBuscarInput      = document.getElementById('v-buscar-numero');
+const vResultadoDiv     = document.getElementById('v-resultado');
+const vStatsPendientes  = document.getElementById('v-stats-pendientes');
+const vStatsVendidos    = document.getElementById('v-stats-vendidos');
+const vStatsGanancias   = document.getElementById('v-stats-ganancias');
+const vListaBoletos     = document.getElementById('v-lista-boletos');
+
+// ── Estado ────────────────────────────────────────
+let vendedorData  = null;
+let configData    = { total: 2000, precio: 0 };
+const unsubscribes = [];
+
+// ── Auth ──────────────────────────────────────────
+const EMAIL_REGEX = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
+
+escucharAuth(async (user) => {
+  if (user) {
+    try {
+      const snap = await getDoc(doc(db, 'vendedores', user.uid));
+      if (!snap.exists() || snap.data().estado !== 'activo') {
+        await cerrarSesion();
+        loginError.textContent = 'Tu cuenta no está habilitada como vendedor.';
+        return;
+      }
+      vendedorData = { uid: user.uid, ...snap.data() };
+    } catch (err) {
+      loginError.textContent = 'Error al verificar acceso: ' + err.message;
+      await cerrarSesion();
+      return;
+    }
+
+    loginSection.classList.add('hidden');
+    vendedorSection.classList.remove('hidden');
+    iniciarPanelVendedor();
+  } else {
+    unsubscribes.forEach(u => u());
+    unsubscribes.length = 0;
+    vendedorData = null;
+    loginSection.classList.remove('hidden');
+    vendedorSection.classList.add('hidden');
+    loginForm?.reset();
+    loginError.textContent = '';
+    const btn = loginForm?.querySelector('button[type="submit"]');
+    if (btn) { btn.disabled = false; btn.textContent = 'Ingresar'; }
+  }
+});
+
+loginForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email    = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const btn      = loginForm.querySelector('button[type="submit"]');
+
+  loginError.textContent = '';
+
+  if (!EMAIL_REGEX.test(email)) {
+    loginError.textContent = 'Ingresá un email válido.';
+    return;
+  }
+  if (password.length < 6) {
+    loginError.textContent = 'La contraseña debe tener al menos 6 caracteres.';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Ingresando...';
+
+  try {
+    await iniciarSesion(email, password);
+  } catch (err) {
+    const mapa = {
+      'auth/invalid-credential': 'Credenciales incorrectas.',
+      'auth/too-many-requests':  'Demasiados intentos. Intentá más tarde.',
+    };
+    loginError.textContent = mapa[err.code] || 'Error al iniciar sesión.';
+    btn.disabled = false;
+    btn.textContent = 'Ingresar';
+  }
+});
+
+logoutBtn?.addEventListener('click', async () => {
+  await cerrarSesion();
+});
+
+// ── Panel principal ───────────────────────────────
+async function iniciarPanelVendedor() {
+  if (vNombreDisplay) vNombreDisplay.textContent = vendedorData.nombre;
+
+  // Cargar config (total y precio)
+  try {
+    const configSnap = await getDoc(doc(db, 'config', 'sorteo'));
+    if (configSnap.exists()) configData = { ...configData, ...configSnap.data() };
+  } catch (_) {}
+
+  if (vBuscarInput) {
+    vBuscarInput.placeholder = `Número del 1 al ${configData.total || 2000}`;
+    vBuscarInput.max = configData.total || 2000;
+  }
+
+  // Listener en tiempo real: mis boletos
+  const qBoletos = query(
+    collection(db, 'numeros'),
+    where('vendedorId', '==', vendedorData.uid)
+  );
+  const unsubBoletos = onSnapshot(qBoletos, (snapshot) => {
+    const boletos = [];
+    snapshot.forEach(d => {
+      const data = d.data();
+      if (data.estado !== 'disponible') boletos.push({ id: d.id, ...data });
+    });
+    actualizarStats(boletos);
+    renderizarMisBoletos(boletos);
+  });
+  unsubscribes.push(unsubBoletos);
+}
+
+function actualizarStats(boletos) {
+  let pendientes = 0;
+  let vendidos   = 0;
+  let ganancias  = 0;
+
+  boletos.forEach(b => {
+    if (b.estado === 'pendiente_aprobacion') pendientes++;
+    if (b.estado === 'vendido') {
+      vendidos++;
+      ganancias += calcularComision(vendedorData.comisionTipo, vendedorData.comisionValor, configData.precio || 0);
+    }
+  });
+
+  if (vStatsPendientes) vStatsPendientes.textContent = pendientes;
+  if (vStatsVendidos)   vStatsVendidos.textContent   = vendidos;
+  if (vStatsGanancias)  vStatsGanancias.textContent  = `$${ganancias.toFixed(2)}`;
+}
+
+function calcularComision(tipo, valor, precio) {
+  if (tipo === 'fija')       return Number(valor);
+  if (tipo === 'porcentaje') return (precio * Number(valor)) / 100;
+  return 0;
+}
+
+function renderizarMisBoletos(boletos) {
+  if (!vListaBoletos) return;
+  if (boletos.length === 0) {
+    vListaBoletos.innerHTML = '<p class="no-data">Todavía no tenés boletos reservados.</p>';
+    return;
+  }
+
+  const etiquetaEstado = {
+    'reservado':             'Reservado',
+    'pendiente_aprobacion':  'Pendiente de aprobación',
+    'vendido':               'Vendido ✓',
+    'cancelado':             'Cancelado',
+  };
+
+  vListaBoletos.innerHTML = boletos
+    .sort((a, b) => Number(a.id) - Number(b.id))
+    .map(b => {
+      const comision = b.estado === 'vendido'
+        ? `$${calcularComision(vendedorData.comisionTipo, vendedorData.comisionValor, configData.precio || 0).toFixed(2)}`
+        : '—';
+      const estadoClass = b.estado === 'vendido' ? 'estado-vendido'
+        : b.estado === 'pendiente_aprobacion' ? 'estado-pendiente' : 'estado-otro';
+      const fecha = b.fechaReserva?.toDate?.()?.toLocaleDateString('es-AR') ?? '—';
+
+      return `
+        <div class="pendiente-card">
+          <div class="pendiente-numero">${b.id}</div>
+          <div class="pendiente-detalles">
+            <p><span class="detalle-label">Comprador:</span> ${b.compradorNombre || '—'}</p>
+            <p><span class="detalle-label">Fecha:</span> ${fecha}</p>
+            <p><span class="detalle-label">Mi comisión:</span> ${comision}</p>
+          </div>
+          <div class="pendiente-acciones">
+            <span class="estado-badge ${estadoClass}">${etiquetaEstado[b.estado] || b.estado}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+}
+
+// ── Búsqueda y reserva de número ──────────────────
+let estadosBoletos = new Map(); // caché local
+
+// Escuchar todos los numeros en tiempo real para conocer disponibilidad
+const unsubAll = onSnapshot(collection(db, 'numeros'), (snap) => {
+  snap.forEach(d => estadosBoletos.set(d.id, d.data().estado || 'disponible'));
+});
+// Este listener es "global" (fuera del panel), se cancela solo al cerrar la página
+
+vBuscarInput?.addEventListener('input', () => {
+  const val = vBuscarInput.value.trim();
+  if (!val) { vResultadoDiv.innerHTML = ''; return; }
+
+  const num = parseInt(val);
+  const total = configData.total || 2000;
+  if (isNaN(num) || num < 1 || num > total) {
+    vResultadoDiv.innerHTML = `<p class="busqueda-error">Número inválido (1 – ${total})</p>`;
+    return;
+  }
+
+  mostrarResultadoVendedor(num);
+});
+
+function mostrarResultadoVendedor(num) {
+  const id     = String(num);
+  const estado = estadosBoletos.get(id) || 'disponible';
+  const disponible = estado === 'disponible';
+
+  const tipoAccion = vendedorData?.ventaDirecta ? 'Vender' : 'Reservar';
+
+  vResultadoDiv.innerHTML = disponible ? `
+    <div class="resultado-card disponible">
+      <span class="resultado-numero">${num}</span>
+      <div class="reserva-form">
+        <input type="text" id="v-comprador-nombre" class="buscar-input buscar-input--sm"
+          placeholder="Nombre del comprador" maxlength="80">
+        <button class="btn-toggle btn-reservar" data-id="${id}">${tipoAccion}</button>
+      </div>
+    </div>
+  ` : `
+    <div class="resultado-card vendido">
+      <span class="resultado-numero">${num}</span>
+      <span class="resultado-estado">No disponible</span>
+    </div>
+  `;
+
+  if (disponible) {
+    vResultadoDiv.querySelector('.btn-reservar')
+      ?.addEventListener('click', () => reservarNumero(id));
+  }
+}
+
+async function reservarNumero(id) {
+  const compradorNombre = document.getElementById('v-comprador-nombre')?.value.trim() || '';
+  const btn = vResultadoDiv.querySelector('.btn-reservar');
+  if (!btn) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Procesando...';
+
+  const nuevoEstado = vendedorData.ventaDirecta ? 'vendido' : 'pendiente_aprobacion';
+  const estadoVenta = vendedorData.ventaDirecta ? 'aprobada' : 'pendiente_aprobacion';
+  const precio      = configData.precio || 0;
+  const comision    = vendedorData.ventaDirecta
+    ? calcularComision(vendedorData.comisionTipo, vendedorData.comisionValor, precio)
+    : 0;
+
+  const numeroRef = doc(db, 'numeros', id);
+  const ventaRef  = doc(collection(db, 'ventas'));
+
+  try {
+    await runTransaction(db, async (txn) => {
+      const numSnap = await txn.get(numeroRef);
+      if (!numSnap.exists() || numSnap.data().estado !== 'disponible') {
+        throw new Error('Este número ya no está disponible.');
+      }
+
+      txn.set(numeroRef, {
+        id: Number(id),
+        estado: nuevoEstado,
+        vendedorId: vendedorData.uid,
+        compradorNombre,
+        fechaReserva: serverTimestamp()
+      });
+
+      txn.set(ventaRef, {
+        numeroId: id,
+        vendedorId: vendedorData.uid,
+        vendedorNombre: vendedorData.nombre,
+        compradorNombre,
+        estado: estadoVenta,
+        precioBoleto: precio,
+        comisionTipo: vendedorData.comisionTipo,
+        comisionValor: vendedorData.comisionValor,
+        comision,
+        fechaCreacion: serverTimestamp(),
+        fechaAprobacion: vendedorData.ventaDirecta ? serverTimestamp() : null
+      });
+    });
+
+    // Si es venta directa, actualizar stats del vendedor
+    if (vendedorData.ventaDirecta) {
+      await updateDoc(doc(db, 'vendedores', vendedorData.uid), {
+        totalVendidos:  increment(1),
+        totalGanancias: increment(comision)
+      });
+    }
+
+    vBuscarInput.value = '';
+    vResultadoDiv.innerHTML = `
+      <div class="resultado-card disponible">
+        <span class="resultado-estado ok-msg">
+          ✓ Número ${id} ${vendedorData.ventaDirecta ? 'vendido' : 'enviado a aprobación'}
+        </span>
+      </div>
+    `;
+    setTimeout(() => { vResultadoDiv.innerHTML = ''; }, 4000);
+
+  } catch (err) {
+    vResultadoDiv.innerHTML = `<p class="busqueda-error">${err.message}</p>`;
+    btn.disabled = false;
+    btn.textContent = vendedorData.ventaDirecta ? 'Vender' : 'Reservar';
+  }
+}

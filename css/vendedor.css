@@ -1,0 +1,63 @@
+/* Estilos específicos del panel de vendedor */
+
+.v-mis-boletos-section {
+  margin-top: var(--space-lg);
+}
+
+/* Input de reserva más compacto */
+.buscar-input--sm {
+  font-size: 0.95rem;
+  font-weight: 400;
+  padding: 10px 14px;
+  text-align: left;
+  max-width: 340px;
+}
+
+.reserva-form {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.btn-reservar {
+  background: var(--accent-gold) !important;
+  color: #08080e !important;
+  white-space: nowrap;
+}
+
+/* Estado de éxito en resultado */
+.ok-msg {
+  color: #6fcf97;
+  font-size: 0.88rem;
+  letter-spacing: 0.03em;
+}
+
+/* Badges de estado en mis boletos */
+.estado-badge {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  padding: 5px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.estado-vendido {
+  background: rgba(26, 58, 42, 0.4);
+  color: #6fcf97;
+  border: 1px solid rgba(111, 207, 151, 0.25);
+}
+
+.estado-pendiente {
+  background: rgba(42, 26, 10, 0.4);
+  color: var(--accent-gold);
+  border: 1px solid var(--border);
+}
+
+.estado-otro {
+  background: rgba(26, 26, 26, 0.4);
+  color: var(--text-muted);
+  border: 1px solid rgba(60, 60, 60, 0.4);
+}
