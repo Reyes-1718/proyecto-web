@@ -1,0 +1,194 @@
+/* ── Barra de controles ──────────────────────── */
+.controles-grilla {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-md) 0;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.filtros-bar {
+  display: flex;
+  gap: 6px;
+}
+
+.filtro-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 8px 18px;
+  border-radius: 100px;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filtro-btn:hover {
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+}
+
+.filtro-btn.active {
+  background: var(--accent-gold);
+  border-color: var(--accent-gold);
+  color: #08080e;
+  font-weight: 600;
+}
+
+.info-grilla {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.info-texto {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
+.info-texto strong {
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+
+.btn-ver-mas {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--accent-gold);
+  padding: 6px 14px;
+  border-radius: 100px;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  transition: all 0.2s;
+}
+
+.btn-ver-mas:hover {
+  background: rgba(201, 168, 76, 0.1);
+  border-color: var(--accent-gold);
+}
+
+/* ── Contenedor de la grilla ─────────────────── */
+.grid-container {
+  padding: var(--space-md) var(--space-md) var(--space-lg);
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+/* ── Grilla CSS Grid ─────────────────────────── */
+.numeros-grid {
+  display: grid;
+  grid-template-columns: repeat(25, 1fr);
+  gap: 4px;
+}
+
+/* ── Celda base ──────────────────────────────── */
+.numero-cell {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: clamp(0.45rem, 0.9vw, 0.72rem);
+  font-weight: 700;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  line-height: 1;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.3s ease;
+  animation: fadeInScale 0.35s ease-out both;
+}
+
+/* ── Número disponible ───────────────────────── */
+.numero-cell.disponible {
+  background: var(--numero-disponible);
+  color: var(--accent-glow);
+  border: 1px solid rgba(201, 168, 76, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.numero-cell.disponible:hover {
+  background: #1f4d32;
+  border-color: var(--accent-gold);
+  color: #fff;
+  transform: scale(1.12);
+  box-shadow:
+    0 0 14px rgba(201, 168, 76, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  z-index: 2;
+  position: relative;
+}
+
+.numero-cell.disponible:active {
+  transform: scale(0.96);
+}
+
+/* ── Número vendido ──────────────────────────── */
+.numero-cell.vendido {
+  background: var(--numero-vendido);
+  color: #3a3a3a;
+  border: 1px solid transparent;
+  cursor: default;
+  text-decoration: line-through;
+  text-decoration-color: #2e2e2e;
+  opacity: 0.55;
+}
+
+.numero-cell.vendido:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* ── Animación al venderse en tiempo real ────── */
+.numero-cell.recien-vendido {
+  animation: sellFlash 0.7s ease-out forwards !important;
+}
+
+@keyframes sellFlash {
+  0%   { background: var(--numero-disponible); transform: scale(1.18); border-color: var(--accent-gold); opacity: 1; }
+  30%  { background: #5a1a1a; transform: scale(1.08); opacity: 1; }
+  100% { background: var(--numero-vendido); transform: scale(1); opacity: 0.55; }
+}
+
+/* ── Animación de entrada escalonada ─────────── */
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.75); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* ── Responsive ──────────────────────────────── */
+@media (max-width: 1200px) {
+  .numeros-grid {
+    grid-template-columns: repeat(20, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .numeros-grid {
+    grid-template-columns: repeat(15, 1fr);
+    gap: 3px;
+  }
+}
+
+@media (max-width: 600px) {
+  .numeros-grid {
+    grid-template-columns: repeat(10, 1fr);
+    gap: 3px;
+  }
+}
+
+@media (max-width: 380px) {
+  .numeros-grid {
+    grid-template-columns: repeat(8, 1fr);
+    gap: 2px;
+  }
+}

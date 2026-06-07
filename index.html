@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gran Sorteo Digital — Rifa 2025</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Josefin+Sans:wght@300;400;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/grid.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <p class="header-pretitle">Gran Sorteo Digital</p>
+    <h1 class="header-title">🎟️ Rifa 2025</h1>
+    <p class="header-desc">Elegí tu número de la suerte</p>
+
+    <div class="stats-bar">
+      <div class="stat">
+        <span class="stat-value" id="disponibles-count">—</span>
+        <span class="stat-label">Disponibles</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat">
+        <span class="stat-value" id="vendidos-count">—</span>
+        <span class="stat-label">Vendidos</span>
+      </div>
+    </div>
+
+    <div class="leyenda">
+      <span class="leyenda-item disponible">Disponible</span>
+      <span class="leyenda-item vendido">Vendido</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="controles-grilla">
+      <div class="filtros-bar">
+        <button class="filtro-btn active" id="filtro-disponibles">Disponibles</button>
+        <button class="filtro-btn" id="filtro-todos">Ver todos (2000)</button>
+      </div>
+      <div id="info-grilla" class="info-grilla"></div>
+    </div>
+
+    <div class="grid-container" id="grid-container">
+      <div class="loading-state" id="loading-state">
+        <div class="spinner"></div>
+        <span>Cargando números...</span>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <span>© 2025 Gran Sorteo Digital</span>
+    <a href="admin.html" class="admin-link">Admin</a>
+  </footer>
+
+  <!-- Modal de número disponible -->
+  <div class="modal-overlay" id="modal-overlay" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="modal-numero" id="modal-numero">0000</div>
+      <div class="modal-badge">Disponible</div>
+      <h2 class="modal-title">¡Este número está libre!</h2>
+      <p class="modal-desc">
+        Para adquirir este número y participar del sorteo,<br>
+        comunicate con el organizador.
+      </p>
+      <button class="modal-close" id="modal-close">Cerrar</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/grid.js"></script>
+</body>
+</html>
