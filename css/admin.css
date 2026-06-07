@@ -385,6 +385,142 @@
   padding: var(--space-sm) 0;
 }
 
+/* ── Badge de sesión activa ──────────────────────── */
+.inactividad-badge {
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6fcf97;
+  border: 1px solid rgba(111, 207, 151, 0.25);
+  border-radius: 20px;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+
+/* ── Modal de inactividad ────────────────────────── */
+.inactividad-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.inactividad-modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: var(--space-xl) var(--space-lg);
+  width: 100%;
+  max-width: 360px;
+  text-align: center;
+  animation: modalIn 0.25s ease-out;
+}
+
+.inactividad-icon {
+  font-size: 2.2rem;
+  margin-bottom: var(--space-sm);
+}
+
+.inactividad-titulo {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: var(--space-sm);
+}
+
+.inactividad-texto {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  margin-bottom: var(--space-lg);
+  line-height: 1.6;
+}
+
+.inactividad-texto strong {
+  color: var(--accent-gold);
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+}
+
+/* ── Configuración del sorteo ────────────────────── */
+.admin-config {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: var(--space-lg);
+  margin-top: var(--space-lg);
+}
+
+.config-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.config-row label {
+  display: block;
+  font-size: 0.68rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.config-input-group {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.config-input {
+  width: 130px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.config-input::-webkit-inner-spin-button,
+.config-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
+
+.config-input:focus {
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.1);
+}
+
+.btn-config {
+  width: auto;
+  padding: 12px 24px;
+}
+
+.config-help {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.config-status {
+  font-size: 0.78rem;
+  min-height: 1.1em;
+}
+
+.config-status.ok    { color: #6fcf97; }
+.config-status.error { color: #e06060; }
+
 /* ── Responsive ──────────────────────────────── */
 @media (max-width: 600px) {
   .admin-header {

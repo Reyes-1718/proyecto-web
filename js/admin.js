@@ -1,33 +1,168 @@
 import { db } from './firebase.js';
 import { iniciarSesion, cerrarSesion, escucharAuth } from './auth.js';
 import {
-  collection, doc, setDoc, onSnapshot
+  collection, doc, setDoc, getDoc, onSnapshot
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-const loginSection = document.getElementById('login-section');
-const adminSection = document.getElementById('admin-section');
-const loginForm = document.getElementById('login-form');
-const loginError = document.getElementById('login-error');
-const logoutBtn = document.getElementById('logout-btn');
-const buscarInput = document.getElementById('buscar-numero');
-const resultadoDiv = document.getElementById('resultado-busqueda');
-const statsVendidos = document.getElementById('stats-vendidos');
-const statsDisponibles = document.getElementById('stats-disponibles');
+// ── DOM refs ──────────────────────────────────────
+const loginSection      = document.getElementById('login-section');
+const adminSection      = document.getElementById('admin-section');
+const loginForm         = document.getElementById('login-form');
+const loginError        = document.getElementById('login-error');
+const logoutBtn         = document.getElementById('logout-btn');
+const buscarInput       = document.getElementById('buscar-numero');
+const resultadoDiv      = document.getElementById('resultado-busqueda');
+const statsVendidos     = document.getElementById('stats-vendidos');
+const statsDisponibles  = document.getElementById('stats-disponibles');
+const statsTotal        = document.getElementById('stats-total');
+const inactividadOverlay = document.getElementById('inactividad-overlay');
+const inactividadCuenta  = document.getElementById('inactividad-cuenta');
+const btnMantenerSesion  = document.getElementById('btn-mantener-sesion');
+const inputTotal        = document.getElementById('input-total');
+const btnGuardarConfig  = document.getElementById('btn-guardar-config');
+const configStatus      = document.getElementById('config-status');
 
-const TOTAL = 2000;
+// ── Estado global ─────────────────────────────────
+let totalBoletos = 2000;
 const vendidosMap = new Map();
 let unsubscribeFirestore = null;
 
-// Escuchar estado de autenticación
+const CONFIG_DOC = doc(db, 'config', 'sorteo');
+
+// ── Cierre por inactividad ────────────────────────
+const INACTIVIDAD_TIMEOUT = 10 * 60 * 1000; // 10 min sin actividad
+const INACTIVIDAD_AVISO   = 60 * 1000;      // aviso 60 seg antes del cierre
+
+let timerInactividad   = null;
+let timerCierre        = null;
+let cuentaAtrasInterval = null;
+let inactividadActiva  = false;
+
+const EVENTOS_ACTIVIDAD = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+
+function resetearInactividad() {
+  if (!inactividadActiva) return;
+  clearTimeout(timerInactividad);
+  clearTimeout(timerCierre);
+  clearInterval(cuentaAtrasInterval);
+  ocultarAvisoInactividad();
+  programarInactividad();
+}
+
+function programarInactividad() {
+  timerInactividad = setTimeout(mostrarAvisoInactividad, INACTIVIDAD_TIMEOUT - INACTIVIDAD_AVISO);
+}
+
+function mostrarAvisoInactividad() {
+  inactividadOverlay?.classList.remove('hidden');
+  let segundos = Math.floor(INACTIVIDAD_AVISO / 1000);
+  if (inactividadCuenta) inactividadCuenta.textContent = segundos;
+
+  clearInterval(cuentaAtrasInterval);
+  cuentaAtrasInterval = setInterval(() => {
+    segundos--;
+    if (inactividadCuenta) inactividadCuenta.textContent = Math.max(0, segundos);
+    if (segundos <= 0) clearInterval(cuentaAtrasInterval);
+  }, 1000);
+
+  // Cerrar sesión automáticamente al expirar el aviso
+  timerCierre = setTimeout(async () => {
+    clearInterval(cuentaAtrasInterval);
+    await cerrarSesion();
+  }, INACTIVIDAD_AVISO);
+}
+
+function ocultarAvisoInactividad() {
+  inactividadOverlay?.classList.add('hidden');
+}
+
+function iniciarInactividad() {
+  inactividadActiva = true;
+  EVENTOS_ACTIVIDAD.forEach(ev =>
+    document.addEventListener(ev, resetearInactividad, { passive: true })
+  );
+  programarInactividad();
+}
+
+function detenerInactividad() {
+  inactividadActiva = false;
+  clearTimeout(timerInactividad);
+  clearTimeout(timerCierre);
+  clearInterval(cuentaAtrasInterval);
+  ocultarAvisoInactividad();
+  EVENTOS_ACTIVIDAD.forEach(ev =>
+    document.removeEventListener(ev, resetearInactividad)
+  );
+}
+
+btnMantenerSesion?.addEventListener('click', () => {
+  resetearInactividad();
+});
+
+// ── Configuración de boletos ──────────────────────
+async function cargarConfig() {
+  try {
+    const snap = await getDoc(CONFIG_DOC);
+    if (snap.exists() && snap.data().total) {
+      totalBoletos = snap.data().total;
+    }
+  } catch (err) {
+    console.error('Error al cargar config:', err);
+  }
+  actualizarUIConfig();
+}
+
+function actualizarUIConfig() {
+  if (inputTotal)    inputTotal.value = totalBoletos;
+  if (statsTotal)    statsTotal.textContent = totalBoletos;
+  if (buscarInput) {
+    buscarInput.placeholder = `Ingresá un número del 1 al ${totalBoletos}`;
+    buscarInput.max = totalBoletos;
+  }
+  statsDisponibles.textContent = totalBoletos - vendidosMap.size;
+}
+
+btnGuardarConfig?.addEventListener('click', async () => {
+  const val = parseInt(inputTotal?.value);
+
+  if (isNaN(val) || val < 1 || val > 99999) {
+    mostrarConfigStatus('Ingresá un número entre 1 y 99.999.', 'error');
+    return;
+  }
+
+  btnGuardarConfig.disabled = true;
+  btnGuardarConfig.textContent = 'Guardando...';
+
+  try {
+    await setDoc(CONFIG_DOC, { total: val });
+    totalBoletos = val;
+    actualizarUIConfig();
+    mostrarConfigStatus('Total actualizado correctamente.', 'ok');
+    setTimeout(() => { if (configStatus) configStatus.textContent = ''; }, 3000);
+  } catch (err) {
+    mostrarConfigStatus('Error al guardar: ' + err.message, 'error');
+  } finally {
+    btnGuardarConfig.disabled = false;
+    btnGuardarConfig.textContent = 'Guardar';
+  }
+});
+
+function mostrarConfigStatus(msg, tipo) {
+  if (!configStatus) return;
+  configStatus.textContent = msg;
+  configStatus.className = `config-status ${tipo}`;
+}
+
+// ── Auth ──────────────────────────────────────────
 escucharAuth((user) => {
   if (user) {
     loginSection.classList.add('hidden');
     adminSection.classList.remove('hidden');
     iniciarPanel();
   } else {
+    detenerInactividad();
     loginSection.classList.remove('hidden');
     adminSection.classList.add('hidden');
-    // Resetear formulario para que el botón no quede en "Ingresando..."
     loginForm?.reset();
     loginError.textContent = '';
     const btn = loginForm?.querySelector('button[type="submit"]');
@@ -39,7 +174,7 @@ escucharAuth((user) => {
   }
 });
 
-// Regex de email RFC-5321 simplificado
+// ── Regex de email RFC-5321 simplificado ──────────
 const EMAIL_REGEX = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
 
 // Login
@@ -51,7 +186,6 @@ loginForm?.addEventListener('submit', async (e) => {
 
   loginError.textContent = '';
 
-  // Validación client-side antes de llamar a Firebase
   if (!EMAIL_REGEX.test(email)) {
     loginError.textContent = 'Ingresá un email válido.';
     return;
@@ -78,14 +212,14 @@ logoutBtn?.addEventListener('click', async () => {
   await cerrarSesion();
 });
 
-// Búsqueda de número
+// ── Búsqueda de número ────────────────────────────
 buscarInput?.addEventListener('input', () => {
   const val = buscarInput.value.trim();
   if (!val) { resultadoDiv.innerHTML = ''; return; }
 
   const num = parseInt(val);
-  if (isNaN(num) || num < 1 || num > TOTAL) {
-    resultadoDiv.innerHTML = '<p class="busqueda-error">Número inválido (1 – 2000)</p>';
+  if (isNaN(num) || num < 1 || num > totalBoletos) {
+    resultadoDiv.innerHTML = `<p class="busqueda-error">Número inválido (1 – ${totalBoletos})</p>`;
     return;
   }
 
@@ -96,7 +230,7 @@ function mostrarResultado(num) {
   const id = String(num);
   const estado = vendidosMap.has(id) ? 'vendido' : 'disponible';
   const etiqueta = estado === 'vendido' ? 'Vendido' : 'Disponible';
-  const accion = estado === 'vendido' ? 'Marcar como disponible' : 'Marcar como vendido';
+  const accion   = estado === 'vendido' ? 'Marcar como disponible' : 'Marcar como vendido';
 
   resultadoDiv.innerHTML = `
     <div class="resultado-card ${estado}">
@@ -118,20 +252,18 @@ async function toggleNumero(e) {
   btn.disabled = true;
   btn.textContent = 'Guardando...';
 
-  // Limpiar error previo
   resultadoDiv.querySelector('.busqueda-error')?.remove();
 
   try {
     await setDoc(doc(db, 'numeros', id), { id: Number(id), estado: nuevoEstado });
 
-    // Actualización local inmediata sin esperar al onSnapshot
     if (nuevoEstado === 'vendido') {
       vendidosMap.set(id, 'vendido');
     } else {
       vendidosMap.delete(id);
     }
     statsVendidos.textContent = vendidosMap.size;
-    statsDisponibles.textContent = TOTAL - vendidosMap.size;
+    statsDisponibles.textContent = totalBoletos - vendidosMap.size;
     mostrarResultado(Number(id));
   } catch (err) {
     const errorEl = document.createElement('p');
@@ -143,8 +275,11 @@ async function toggleNumero(e) {
   }
 }
 
-// Escucha en tiempo real para el panel admin
+// ── Panel principal ───────────────────────────────
 function iniciarPanel() {
+  cargarConfig();
+  iniciarInactividad();
+
   if (unsubscribeFirestore) unsubscribeFirestore();
 
   const numerosRef = collection(db, 'numeros');
@@ -158,24 +293,23 @@ function iniciarPanel() {
     });
 
     statsVendidos.textContent = vendidosMap.size;
-    statsDisponibles.textContent = TOTAL - vendidosMap.size;
+    statsDisponibles.textContent = totalBoletos - vendidosMap.size;
 
-    // Refrescar resultado de búsqueda activa
     const val = buscarInput?.value.trim();
     if (val) {
       const num = parseInt(val);
-      if (!isNaN(num) && num >= 1 && num <= TOTAL) mostrarResultado(num);
+      if (!isNaN(num) && num >= 1 && num <= totalBoletos) mostrarResultado(num);
     }
   });
 }
 
 function traducirError(code) {
   const mapa = {
-    'auth/invalid-email': 'Email inválido.',
-    'auth/user-not-found': 'Usuario no encontrado.',
-    'auth/wrong-password': 'Contraseña incorrecta.',
-    'auth/invalid-credential': 'Credenciales incorrectas.',
-    'auth/too-many-requests': 'Demasiados intentos. Intentá más tarde.',
+    'auth/invalid-email':       'Email inválido.',
+    'auth/user-not-found':      'Usuario no encontrado.',
+    'auth/wrong-password':      'Contraseña incorrecta.',
+    'auth/invalid-credential':  'Credenciales incorrectas.',
+    'auth/too-many-requests':   'Demasiados intentos. Intentá más tarde.',
   };
   return mapa[code] || 'Error al iniciar sesión.';
 }
