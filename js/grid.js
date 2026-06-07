@@ -1,5 +1,5 @@
 import { db } from './firebase.js';
-import { collection, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { collection, getDocs, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const TOTAL = 2000;
 
@@ -175,46 +175,44 @@ btnTodos?.addEventListener('click', () => {
   if (datosCargados) renderizarTodos();
 });
 
-// ── Escucha Firestore en tiempo real ──────────────
-function iniciarEscucha() {
+// ── Carga inicial rápida + escucha en tiempo real ─
+async function iniciarEscucha() {
+  // 1. getDocs: carga HTTP inmediata (no espera WebSocket)
+  try {
+    const snap = await getDocs(collection(db, 'numeros'));
+    snap.forEach((docSnap) => {
+      estadoMap.set(docSnap.id, docSnap.data().estado || 'disponible');
+    });
+  } catch (err) {
+    console.error('Error en carga inicial:', err);
+  }
+
+  datosCargados = true;
+  renderizarDisponibles();
+  actualizarContadores();
+
+  // 2. onSnapshot: solo para cambios en tiempo real después de la carga
   onSnapshot(collection(db, 'numeros'), (snapshot) => {
-    if (!datosCargados) {
-      // Primera carga: sincronizar estadoMap con Firestore
-      snapshot.forEach((doc) => {
-        estadoMap.set(doc.id, doc.data().estado || 'disponible');
-      });
-      datosCargados = true;
-      renderizarDisponibles(); // vista por defecto
-    } else {
-      // Cambios posteriores: actualizar solo lo que cambió
-      snapshot.docChanges().forEach((change) => {
-        const id = change.doc.id;
-        const estado = change.type === 'removed'
-          ? 'disponible'
-          : (change.doc.data().estado || 'disponible');
-        estadoMap.set(id, estado);
+    snapshot.docChanges().forEach((change) => {
+      const id = change.doc.id;
+      const nuevoEstado = change.type === 'removed'
+        ? 'disponible'
+        : (change.doc.data().estado || 'disponible');
 
-        if (modoVista === 'todos') {
-          actualizarCeldaTodos(id);
-        }
-      });
+      if (estadoMap.get(id) === nuevoEstado) return; // sin cambio real
 
-      if (modoVista === 'disponibles') {
-        renderizarDisponibles();
-      }
-    }
+      estadoMap.set(id, nuevoEstado);
+      if (modoVista === 'todos') actualizarCeldaTodos(id);
+    });
 
+    if (modoVista === 'disponibles') renderizarDisponibles();
     actualizarContadores();
   }, (error) => {
-    console.error('Error al escuchar Firestore:', error);
-    loadingState?.remove();
-    gridContainer.innerHTML = `
-      <div class="loading-state">
-        <p style="color:#e06060;text-align:center">
-          Error de conexión con la base de datos.<br>
-          <small style="opacity:.6">${error.message}</small>
-        </p>
-      </div>`;
+    console.error('Error en tiempo real:', error);
+    gridContainer.insertAdjacentHTML('afterbegin', `
+      <p style="color:#e06060;text-align:center;padding:var(--space-md)">
+        Sin conexión en tiempo real: ${error.message}
+      </p>`);
   });
 }
 
