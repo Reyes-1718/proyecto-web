@@ -772,7 +772,7 @@
 
 .form-select {
   width: 100%;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 13px 16px;
@@ -786,6 +786,11 @@
 }
 
 .form-select:focus { border-color: var(--accent-gold); }
+
+.form-select option {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
 
 .form-checks {
   display: flex;
