@@ -39,14 +39,28 @@ escucharAuth((user) => {
   }
 });
 
+// Regex de email RFC-5321 simplificado
+const EMAIL_REGEX = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
+
 // Login
 loginForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const email = document.getElementById('email').value;
+  const email    = document.getElementById('email').value.trim();
   const password = document.getElementById('password').value;
-  const btn = loginForm.querySelector('button[type="submit"]');
+  const btn      = loginForm.querySelector('button[type="submit"]');
 
   loginError.textContent = '';
+
+  // Validación client-side antes de llamar a Firebase
+  if (!EMAIL_REGEX.test(email)) {
+    loginError.textContent = 'Ingresá un email válido.';
+    return;
+  }
+  if (password.length < 6) {
+    loginError.textContent = 'La contraseña debe tener al menos 6 caracteres.';
+    return;
+  }
+
   btn.disabled = true;
   btn.textContent = 'Ingresando...';
 
