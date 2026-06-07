@@ -40,7 +40,7 @@ const camposAuth         = document.getElementById('campos-auth');
 // ── Estado global ─────────────────────────────────
 let totalBoletos  = 2000;
 let precioBoleto  = 0;
-const vendidosMap = new Map();
+const numerosStateMap = new Map(); // id → estado completo (vendido, pendiente_aprobacion, etc.)
 const unsubscribes = [];
 let editandoVendedorUid = null; // null = crear, uid = editar
 
@@ -152,7 +152,18 @@ function actualizarUIConfig() {
     buscarInput.placeholder = `Ingresá un número del 1 al ${totalBoletos}`;
     buscarInput.max = totalBoletos;
   }
-  statsDisponibles.textContent = totalBoletos - vendidosMap.size;
+  actualizarStatsAdmin();
+}
+
+function actualizarStatsAdmin() {
+  let vendidos    = 0;
+  let noDisponibles = 0;
+  numerosStateMap.forEach((estado) => {
+    if (estado === 'vendido') vendidos++;
+    if (estado !== 'disponible') noDisponibles++;
+  });
+  statsVendidos.textContent    = vendidos;
+  statsDisponibles.textContent = totalBoletos - noDisponibles;
 }
 
 btnGuardarConfig?.addEventListener('click', async () => {
@@ -278,17 +289,37 @@ buscarInput?.addEventListener('input', () => {
   mostrarResultado(num);
 });
 
+const ETIQUETAS_ESTADO = {
+  disponible:            'Disponible',
+  vendido:               'Vendido',
+  pendiente_aprobacion:  'Pendiente de aprobación',
+  reservado:             'Reservado',
+  cancelado:             'Cancelado',
+};
+
 function mostrarResultado(num) {
-  const id = String(num);
-  const estado   = vendidosMap.has(id) ? 'vendido' : 'disponible';
-  const etiqueta = estado === 'vendido' ? 'Vendido' : 'Disponible';
-  const accion   = estado === 'vendido' ? 'Marcar como disponible' : 'Marcar como vendido';
+  const id           = String(num);
+  const estadoReal   = numerosStateMap.get(id) || 'disponible';
+  const esDisponible = estadoReal === 'disponible';
+  const esVendido    = estadoReal === 'vendido';
+  // Para el CSS el card solo diferencia disponible vs no-disponible
+  const claseCard    = esDisponible ? 'disponible' : 'vendido';
+  const etiqueta     = ETIQUETAS_ESTADO[estadoReal] || estadoReal;
+
+  // Solo el admin puede forzar toggle en disponible ↔ vendido
+  const botonToggle = (esDisponible || esVendido)
+    ? `<button class="btn-toggle" data-id="${id}" data-estado="${estadoReal}">
+         ${esVendido ? 'Marcar como disponible' : 'Marcar como vendido'}
+       </button>`
+    : `<span class="resultado-estado" style="font-size:0.72rem;color:var(--accent-gold)">
+         Ver pestaña Pendientes
+       </span>`;
 
   resultadoDiv.innerHTML = `
-    <div class="resultado-card ${estado}">
+    <div class="resultado-card ${claseCard}">
       <span class="resultado-numero">${String(num)}</span>
       <span class="resultado-estado">${etiqueta}</span>
-      <button class="btn-toggle" data-id="${id}" data-estado="${estado}">${accion}</button>
+      ${botonToggle}
     </div>
   `;
 
@@ -315,11 +346,8 @@ async function toggleNumero(e) {
       fechaReserva: null
     });
 
-    if (nuevoEstado === 'vendido') vendidosMap.set(id, 'vendido');
-    else vendidosMap.delete(id);
-
-    statsVendidos.textContent    = vendidosMap.size;
-    statsDisponibles.textContent = totalBoletos - vendidosMap.size;
+    numerosStateMap.set(id, nuevoEstado);
+    actualizarStatsAdmin();
     mostrarResultado(Number(id));
   } catch (err) {
     const errorEl = document.createElement('p');
@@ -577,18 +605,17 @@ function iniciarPanel() {
   cargarConfig();
   iniciarInactividad();
 
-  // Listener: numeros
+  // Listener: numeros — guarda el estado real de cada número
   const unsubNumeros = onSnapshot(collection(db, 'numeros'), (snapshot) => {
-    vendidosMap.clear();
-    let pendCount = 0;
-    snapshot.forEach((docSnap) => {
-      const estado = docSnap.data().estado;
-      if (estado === 'vendido') vendidosMap.set(docSnap.id, 'vendido');
-      if (estado === 'pendiente_aprobacion') pendCount++;
+    snapshot.docChanges().forEach((change) => {
+      if (change.type === 'removed') {
+        numerosStateMap.delete(change.doc.id);
+      } else {
+        numerosStateMap.set(change.doc.id, change.doc.data().estado || 'disponible');
+      }
     });
 
-    statsVendidos.textContent    = vendidosMap.size;
-    statsDisponibles.textContent = totalBoletos - vendidosMap.size;
+    actualizarStatsAdmin();
 
     const val = buscarInput?.value.trim();
     if (val) {
