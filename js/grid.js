@@ -1,9 +1,9 @@
 import { db } from './firebase.js';
-import { collection, getDocs, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { collection, doc, getDoc, getDocs, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-const TOTAL = 2000;
+let TOTAL = 2000;
 
-// Mapa de estado de los 2000 números (fuente de verdad local)
+// Mapa de estado de los números (fuente de verdad local)
 const estadoMap = new Map();
 for (let i = 1; i <= TOTAL; i++) estadoMap.set(String(i), 'disponible');
 
@@ -177,6 +177,18 @@ btnTodos?.addEventListener('click', () => {
 
 // ── Carga inicial rápida + escucha en tiempo real ─
 async function iniciarEscucha() {
+  // 0. Cargar total de boletos desde config
+  try {
+    const configSnap = await getDoc(doc(db, 'config', 'sorteo'));
+    if (configSnap.exists() && configSnap.data().total) {
+      TOTAL = configSnap.data().total;
+      estadoMap.clear();
+      for (let i = 1; i <= TOTAL; i++) estadoMap.set(String(i), 'disponible');
+    }
+  } catch (err) {
+    console.error('Error al cargar config:', err);
+  }
+
   // 1. getDocs: carga HTTP inmediata (no espera WebSocket)
   try {
     const snap = await getDocs(collection(db, 'numeros'));
