@@ -27,6 +27,11 @@ escucharAuth((user) => {
   } else {
     loginSection.classList.remove('hidden');
     adminSection.classList.add('hidden');
+    // Resetear formulario para que el botón no quede en "Ingresando..."
+    loginForm?.reset();
+    loginError.textContent = '';
+    const btn = loginForm?.querySelector('button[type="submit"]');
+    if (btn) { btn.disabled = false; btn.textContent = 'Ingresar'; }
     if (unsubscribeFirestore) {
       unsubscribeFirestore();
       unsubscribeFirestore = null;
