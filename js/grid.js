@@ -207,6 +207,14 @@ function iniciarEscucha() {
     actualizarContadores();
   }, (error) => {
     console.error('Error al escuchar Firestore:', error);
+    loadingState?.remove();
+    gridContainer.innerHTML = `
+      <div class="loading-state">
+        <p style="color:#e06060;text-align:center">
+          Error de conexión con la base de datos.<br>
+          <small style="opacity:.6">${error.message}</small>
+        </p>
+      </div>`;
   });
 }
 

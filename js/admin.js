@@ -99,11 +99,26 @@ async function toggleNumero(e) {
   btn.disabled = true;
   btn.textContent = 'Guardando...';
 
+  // Limpiar error previo
+  resultadoDiv.querySelector('.busqueda-error')?.remove();
+
   try {
     await setDoc(doc(db, 'numeros', id), { id: Number(id), estado: nuevoEstado });
-    // El onSnapshot actualizará el mapa y mostrará el resultado fresco
+
+    // Actualización local inmediata sin esperar al onSnapshot
+    if (nuevoEstado === 'vendido') {
+      vendidosMap.set(id, 'vendido');
+    } else {
+      vendidosMap.delete(id);
+    }
+    statsVendidos.textContent = vendidosMap.size;
+    statsDisponibles.textContent = TOTAL - vendidosMap.size;
+    mostrarResultado(Number(id));
   } catch (err) {
-    alert('Error al actualizar: ' + err.message);
+    const errorEl = document.createElement('p');
+    errorEl.className = 'busqueda-error';
+    errorEl.textContent = 'Error al guardar: ' + err.message;
+    resultadoDiv.appendChild(errorEl);
     btn.disabled = false;
     btn.textContent = estadoActual === 'vendido' ? 'Marcar como disponible' : 'Marcar como vendido';
   }
