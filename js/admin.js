@@ -33,19 +33,18 @@ const CONFIG_DOC = doc(db, 'config', 'sorteo');
 const INACTIVIDAD_TIMEOUT = 10 * 60 * 1000; // 10 min sin actividad
 const INACTIVIDAD_AVISO   = 60 * 1000;      // aviso 60 seg antes del cierre
 
-let timerInactividad   = null;
-let timerCierre        = null;
+let timerInactividad    = null;
+let timerCierre         = null;
 let cuentaAtrasInterval = null;
-let inactividadActiva  = false;
+let inactividadActiva   = false;
+let avisandoInactividad = false; // true mientras el modal de aviso está visible
 
 const EVENTOS_ACTIVIDAD = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
 
 function resetearInactividad() {
-  if (!inactividadActiva) return;
+  // Ignorar eventos de usuario mientras el aviso está en pantalla
+  if (!inactividadActiva || avisandoInactividad) return;
   clearTimeout(timerInactividad);
-  clearTimeout(timerCierre);
-  clearInterval(cuentaAtrasInterval);
-  ocultarAvisoInactividad();
   programarInactividad();
 }
 
@@ -54,6 +53,7 @@ function programarInactividad() {
 }
 
 function mostrarAvisoInactividad() {
+  avisandoInactividad = true;
   inactividadOverlay?.classList.remove('hidden');
   let segundos = Math.floor(INACTIVIDAD_AVISO / 1000);
   if (inactividadCuenta) inactividadCuenta.textContent = segundos;
@@ -78,6 +78,7 @@ function ocultarAvisoInactividad() {
 
 function iniciarInactividad() {
   inactividadActiva = true;
+  avisandoInactividad = false;
   EVENTOS_ACTIVIDAD.forEach(ev =>
     document.addEventListener(ev, resetearInactividad, { passive: true })
   );
@@ -86,6 +87,7 @@ function iniciarInactividad() {
 
 function detenerInactividad() {
   inactividadActiva = false;
+  avisandoInactividad = false;
   clearTimeout(timerInactividad);
   clearTimeout(timerCierre);
   clearInterval(cuentaAtrasInterval);
@@ -96,7 +98,12 @@ function detenerInactividad() {
 }
 
 btnMantenerSesion?.addEventListener('click', () => {
-  resetearInactividad();
+  // El usuario confirmó que sigue activo — resetear todo manualmente
+  clearTimeout(timerCierre);
+  clearInterval(cuentaAtrasInterval);
+  ocultarAvisoInactividad();
+  avisandoInactividad = false;
+  programarInactividad();
 });
 
 // ── Configuración de boletos ──────────────────────
