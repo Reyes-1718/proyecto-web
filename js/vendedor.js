@@ -111,7 +111,22 @@ async function iniciarPanelVendedor() {
     vBuscarInput.max = configData.total || 2000;
   }
 
-  // Listener en tiempo real: mis boletos
+  // Listener: todos los numeros → disponibilidad para búsqueda
+  const unsubDisponibilidad = onSnapshot(collection(db, 'numeros'), (snap) => {
+    snap.docChanges().forEach(change => {
+      if (change.type === 'removed') estadosBoletos.delete(change.doc.id);
+      else estadosBoletos.set(change.doc.id, change.doc.data().estado || 'disponible');
+    });
+    // Refrescar resultado si hay una búsqueda activa
+    const val = vBuscarInput?.value.trim();
+    if (val) {
+      const num = parseInt(val);
+      if (!isNaN(num) && num >= 1 && num <= (configData.total || 2000)) mostrarResultadoVendedor(num);
+    }
+  });
+  unsubscribes.push(unsubDisponibilidad);
+
+  // Listener: mis boletos en tiempo real
   const qBoletos = query(
     collection(db, 'numeros'),
     where('vendedorId', '==', vendedorData.uid)
@@ -195,12 +210,6 @@ function renderizarMisBoletos(boletos) {
 // ── Búsqueda y reserva de número ──────────────────
 let estadosBoletos = new Map(); // caché local
 
-// Escuchar todos los numeros en tiempo real para conocer disponibilidad
-const unsubAll = onSnapshot(collection(db, 'numeros'), (snap) => {
-  snap.forEach(d => estadosBoletos.set(d.id, d.data().estado || 'disponible'));
-});
-// Este listener es "global" (fuera del panel), se cancela solo al cerrar la página
-
 vBuscarInput?.addEventListener('input', () => {
   const val = vBuscarInput.value.trim();
   if (!val) { vResultadoDiv.innerHTML = ''; return; }
@@ -265,7 +274,9 @@ async function reservarNumero(id) {
   try {
     await runTransaction(db, async (txn) => {
       const numSnap = await txn.get(numeroRef);
-      if (!numSnap.exists() || numSnap.data().estado !== 'disponible') {
+      // Si el documento no existe en Firestore, el número está disponible (estado por defecto)
+      const estadoActual = numSnap.exists() ? numSnap.data().estado : 'disponible';
+      if (estadoActual !== 'disponible') {
         throw new Error('Este número ya no está disponible.');
       }
 
