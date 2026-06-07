@@ -36,6 +36,8 @@ const btnSubmitVendedor  = document.getElementById('btn-submit-vendedor');
 const errorVendedor      = document.getElementById('error-vendedor');
 const tituloModalVendedor = document.getElementById('modal-vendedor-titulo');
 const camposAuth         = document.getElementById('campos-auth');
+const camposComision     = document.getElementById('campos-comision');
+const chkTieneComisiones = document.getElementById('v-tiene-comisiones');
 
 // ── Estado global ─────────────────────────────────
 let totalBoletos  = 2000;
@@ -374,8 +376,14 @@ function renderizarPendientes(pendientes) {
   }
 
   listaPendientes.innerHTML = pendientes.map(({ id, data }) => {
-    const comisionEst = calcularComision(data.comisionTipo, data.comisionValor, data.precioBoleto).toFixed(2);
+    const usaComisiones = data.tieneComisiones !== false;
+    const comisionEst   = usaComisiones
+      ? calcularComision(data.comisionTipo, data.comisionValor, data.precioBoleto).toFixed(2)
+      : null;
     const fecha = data.fechaCreacion?.toDate?.()?.toLocaleDateString('es-AR') ?? '—';
+    const lineaPrecio = usaComisiones
+      ? `<p><span class="detalle-label">Precio:</span> $${data.precioBoleto} &nbsp;|&nbsp; Comisión est.: $${comisionEst}</p>`
+      : `<p><span class="detalle-label">Precio:</span> $${data.precioBoleto}</p>`;
     return `
       <div class="pendiente-card">
         <div class="pendiente-numero">${data.numeroId}</div>
@@ -383,10 +391,10 @@ function renderizarPendientes(pendientes) {
           <p><span class="detalle-label">Comprador:</span> ${data.compradorNombre || '—'}</p>
           <p><span class="detalle-label">Vendedor:</span> ${data.vendedorNombre}</p>
           <p><span class="detalle-label">Fecha:</span> ${fecha}</p>
-          <p><span class="detalle-label">Precio:</span> $${data.precioBoleto} &nbsp;|&nbsp; Comisión est.: $${comisionEst}</p>
+          ${lineaPrecio}
         </div>
         <div class="pendiente-acciones">
-          <button class="btn-aprobar"  data-id="${id}" data-numero="${data.numeroId}" data-vendedor="${data.vendedorId}" data-tipo="${data.comisionTipo}" data-valor="${data.comisionValor}" data-precio="${data.precioBoleto}">Aprobar</button>
+          <button class="btn-aprobar"  data-id="${id}" data-numero="${data.numeroId}" data-vendedor="${data.vendedorId}" data-tipo="${data.comisionTipo}" data-valor="${data.comisionValor}" data-precio="${data.precioBoleto}" data-tiene-comisiones="${usaComisiones}">Aprobar</button>
           <button class="btn-rechazar" data-id="${id}" data-numero="${data.numeroId}">Rechazar</button>
         </div>
       </div>
@@ -402,9 +410,12 @@ function renderizarPendientes(pendientes) {
 }
 
 async function aprobarVenta(d) {
-  const comision = calcularComision(d.tipo, parseFloat(d.valor), parseFloat(d.precio));
-  const numeroRef  = doc(db, 'numeros', d.numero);
-  const ventaRef   = doc(db, 'ventas', d.id);
+  const usaComisiones = d.tieneComisiones !== 'false';
+  const comision      = usaComisiones
+    ? calcularComision(d.tipo, parseFloat(d.valor), parseFloat(d.precio))
+    : 0;
+  const numeroRef   = doc(db, 'numeros', d.numero);
+  const ventaRef    = doc(db, 'ventas', d.id);
   const vendedorRef = doc(db, 'vendedores', d.vendedor);
 
   try {
@@ -412,10 +423,10 @@ async function aprobarVenta(d) {
       txn.update(numeroRef, { estado: 'vendido', fechaVenta: serverTimestamp() });
       txn.update(ventaRef, { estado: 'aprobada', comision, fechaAprobacion: serverTimestamp() });
     });
-    await updateDoc(vendedorRef, {
-      totalVendidos:  increment(1),
-      totalGanancias: increment(comision)
-    });
+    const statsUpdate = usaComisiones
+      ? { totalVendidos: increment(1), totalGanancias: increment(comision) }
+      : { totalVendidos: increment(1) };
+    await updateDoc(vendedorRef, statsUpdate);
   } catch (err) {
     alert('Error al aprobar: ' + err.message);
   }
@@ -444,9 +455,12 @@ function renderizarVendedores(vendedores) {
   }
 
   vendedoresTbody.innerHTML = vendedores.map(({ uid, data }) => {
-    const comisionStr  = data.comisionTipo === 'fija' ? `$${data.comisionValor}` : `${data.comisionValor}%`;
-    const estadoClass  = data.estado === 'activo' ? 'badge-activo' : 'badge-inactivo';
-    const ganancias    = (data.totalGanancias ?? 0).toFixed(2);
+    const usaComisiones = data.tieneComisiones !== false;
+    const comisionStr   = usaComisiones
+      ? (data.comisionTipo === 'fija' ? `$${data.comisionValor}` : `${data.comisionValor}%`)
+      : '—';
+    const estadoClass = data.estado === 'activo' ? 'badge-activo' : 'badge-inactivo';
+    const ganancias   = usaComisiones ? `$${(data.totalGanancias ?? 0).toFixed(2)}` : '—';
     return `
       <tr>
         <td data-label="Nombre">${data.nombre}</td>
@@ -455,7 +469,7 @@ function renderizarVendedores(vendedores) {
         <td data-label="Comisión">${comisionStr}</td>
         <td data-label="Aprobación">${data.requiereAprobacion ? 'Requerida' : 'No requerida'}</td>
         <td data-label="Vendidos">${data.totalVendidos ?? 0}</td>
-        <td data-label="Ganancias">$${ganancias}</td>
+        <td data-label="Ganancias">${ganancias}</td>
         <td data-label="Acciones" class="acciones-col">
           <button class="btn-ghost btn-sm btn-editar-vendedor" data-uid="${uid}">Editar</button>
           <button class="btn-ghost btn-sm ${data.estado === 'activo' ? 'danger' : ''} btn-toggle-vendedor"
@@ -494,6 +508,9 @@ function abrirModalCrear() {
   if (tituloModalVendedor)   tituloModalVendedor.textContent = 'Nuevo vendedor';
   if (btnSubmitVendedor)     btnSubmitVendedor.textContent = 'Crear vendedor';
   if (camposAuth)            camposAuth.classList.remove('hidden');
+  // Por defecto nuevo vendedor usa comisiones → mostrar campos
+  if (camposComision)        camposComision.classList.remove('hidden');
+  if (chkTieneComisiones)    chkTieneComisiones.checked = true;
   modalVendedor?.classList.remove('hidden');
 }
 
@@ -508,12 +525,15 @@ async function abrirModalEditar(uid) {
     const snap = await getDoc(doc(db, 'vendedores', uid));
     if (!snap.exists()) return;
     const d = snap.data();
+    const tieneComisiones = d.tieneComisiones ?? true;
     document.getElementById('v-nombre').value         = d.nombre || '';
     document.getElementById('v-contacto').value       = d.contacto || '';
+    document.getElementById('v-tiene-comisiones').checked    = tieneComisiones;
     document.getElementById('v-comision-tipo').value  = d.comisionTipo || 'porcentaje';
     document.getElementById('v-comision-valor').value = d.comisionValor ?? 0;
     document.getElementById('v-requiere-aprobacion').checked = d.requiereAprobacion ?? true;
     document.getElementById('v-venta-directa').checked       = d.ventaDirecta ?? false;
+    camposComision?.classList.toggle('hidden', !tieneComisiones);
   } catch (err) {
     if (errorVendedor) errorVendedor.textContent = 'Error al cargar datos: ' + err.message;
   }
@@ -533,14 +553,21 @@ modalVendedor?.addEventListener('click', (e) => {
   if (e.target === modalVendedor) cerrarModalVendedor();
 });
 
+// Toggle visibilidad de campos de comisión
+chkTieneComisiones?.addEventListener('change', () => {
+  camposComision?.classList.toggle('hidden', !chkTieneComisiones.checked);
+});
+
 formVendedor?.addEventListener('submit', async (e) => {
   e.preventDefault();
   if (errorVendedor) errorVendedor.textContent = '';
 
-  const nombre         = document.getElementById('v-nombre').value.trim();
-  const contacto       = document.getElementById('v-contacto').value.trim();
-  const comisionTipo   = document.getElementById('v-comision-tipo').value;
-  const comisionValor  = parseFloat(document.getElementById('v-comision-valor').value);
+  const nombre             = document.getElementById('v-nombre').value.trim();
+  const contacto           = document.getElementById('v-contacto').value.trim();
+  const tieneComisiones    = document.getElementById('v-tiene-comisiones').checked;
+  const comisionTipo       = tieneComisiones ? document.getElementById('v-comision-tipo').value : null;
+  const comisionValorRaw   = parseFloat(document.getElementById('v-comision-valor').value);
+  const comisionValor      = tieneComisiones ? comisionValorRaw : 0;
   const requiereAprobacion = document.getElementById('v-requiere-aprobacion').checked;
   const ventaDirecta       = document.getElementById('v-venta-directa').checked;
 
@@ -548,7 +575,7 @@ formVendedor?.addEventListener('submit', async (e) => {
     if (errorVendedor) errorVendedor.textContent = 'El nombre es obligatorio.';
     return;
   }
-  if (isNaN(comisionValor) || comisionValor < 0) {
+  if (tieneComisiones && (isNaN(comisionValorRaw) || comisionValorRaw < 0)) {
     if (errorVendedor) errorVendedor.textContent = 'Ingresá un valor de comisión válido.';
     return;
   }
@@ -561,7 +588,8 @@ formVendedor?.addEventListener('submit', async (e) => {
     if (editandoVendedorUid) {
       // Editar vendedor existente (sin cambiar credenciales Auth)
       await updateDoc(doc(db, 'vendedores', editandoVendedorUid), {
-        nombre, contacto, comisionTipo, comisionValor, requiereAprobacion, ventaDirecta
+        nombre, contacto, tieneComisiones, comisionTipo, comisionValor,
+        requiereAprobacion, ventaDirecta
       });
     } else {
       // Crear vendedor nuevo
@@ -581,7 +609,7 @@ formVendedor?.addEventListener('submit', async (e) => {
       await setDoc(doc(db, 'vendedores', nuevoUser.uid), {
         nombre, contacto, email,
         estado: 'activo',
-        comisionTipo, comisionValor,
+        tieneComisiones, comisionTipo, comisionValor,
         requiereAprobacion, ventaDirecta,
         fechaCreacion: serverTimestamp(),
         totalVendidos: 0,

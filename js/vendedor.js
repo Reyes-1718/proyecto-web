@@ -111,6 +111,12 @@ async function iniciarPanelVendedor() {
     vBuscarInput.max = configData.total || 2000;
   }
 
+  // Ocultar card de ganancias si el vendedor no usa comisiones
+  if (vendedorData.tieneComisiones === false) {
+    const cardGanancias = document.getElementById('card-ganancias');
+    if (cardGanancias) cardGanancias.classList.add('hidden');
+  }
+
   // Listener: todos los numeros → disponibilidad para búsqueda
   const unsubDisponibilidad = onSnapshot(collection(db, 'numeros'), (snap) => {
     snap.docChanges().forEach(change => {
@@ -146,19 +152,24 @@ async function iniciarPanelVendedor() {
 function actualizarStats(boletos) {
   let pendientes = 0;
   let vendidos   = 0;
-  let ganancias  = 0;
 
   boletos.forEach(b => {
     if (b.estado === 'pendiente_aprobacion') pendientes++;
-    if (b.estado === 'vendido') {
-      vendidos++;
-      ganancias += calcularComision(vendedorData.comisionTipo, vendedorData.comisionValor, configData.precio || 0);
-    }
+    if (b.estado === 'vendido') vendidos++;
   });
 
   if (vStatsPendientes) vStatsPendientes.textContent = pendientes;
   if (vStatsVendidos)   vStatsVendidos.textContent   = vendidos;
-  if (vStatsGanancias)  vStatsGanancias.textContent  = `$${ganancias.toFixed(2)}`;
+
+  if (vendedorData.tieneComisiones !== false && vStatsGanancias) {
+    let ganancias = 0;
+    boletos.forEach(b => {
+      if (b.estado === 'vendido') {
+        ganancias += calcularComision(vendedorData.comisionTipo, vendedorData.comisionValor, configData.precio || 0);
+      }
+    });
+    vStatsGanancias.textContent = `$${ganancias.toFixed(2)}`;
+  }
 }
 
 function calcularComision(tipo, valor, precio) {
@@ -184,12 +195,12 @@ function renderizarMisBoletos(boletos) {
   vListaBoletos.innerHTML = boletos
     .sort((a, b) => Number(a.id) - Number(b.id))
     .map(b => {
-      const comision = b.estado === 'vendido'
-        ? `$${calcularComision(vendedorData.comisionTipo, vendedorData.comisionValor, configData.precio || 0).toFixed(2)}`
-        : '—';
       const estadoClass = b.estado === 'vendido' ? 'estado-vendido'
         : b.estado === 'pendiente_aprobacion' ? 'estado-pendiente' : 'estado-otro';
       const fecha = b.fechaReserva?.toDate?.()?.toLocaleDateString('es-AR') ?? '—';
+      const lineaComision = (vendedorData.tieneComisiones !== false && b.estado === 'vendido')
+        ? `<p><span class="detalle-label">Mi comisión:</span> $${calcularComision(vendedorData.comisionTipo, vendedorData.comisionValor, configData.precio || 0).toFixed(2)}</p>`
+        : '';
 
       return `
         <div class="pendiente-card">
@@ -197,7 +208,7 @@ function renderizarMisBoletos(boletos) {
           <div class="pendiente-detalles">
             <p><span class="detalle-label">Comprador:</span> ${b.compradorNombre || '—'}</p>
             <p><span class="detalle-label">Fecha:</span> ${fecha}</p>
-            <p><span class="detalle-label">Mi comisión:</span> ${comision}</p>
+            ${lineaComision}
           </div>
           <div class="pendiente-acciones">
             <span class="estado-badge ${estadoClass}">${etiquetaEstado[b.estado] || b.estado}</span>
@@ -261,10 +272,11 @@ async function reservarNumero(id) {
   btn.disabled = true;
   btn.textContent = 'Procesando...';
 
-  const nuevoEstado = vendedorData.ventaDirecta ? 'vendido' : 'pendiente_aprobacion';
-  const estadoVenta = vendedorData.ventaDirecta ? 'aprobada' : 'pendiente_aprobacion';
-  const precio      = configData.precio || 0;
-  const comision    = vendedorData.ventaDirecta
+  const nuevoEstado     = vendedorData.ventaDirecta ? 'vendido' : 'pendiente_aprobacion';
+  const estadoVenta     = vendedorData.ventaDirecta ? 'aprobada' : 'pendiente_aprobacion';
+  const precio          = configData.precio || 0;
+  const usaComisiones   = vendedorData.tieneComisiones !== false;
+  const comision        = (usaComisiones && vendedorData.ventaDirecta)
     ? calcularComision(vendedorData.comisionTipo, vendedorData.comisionValor, precio)
     : 0;
 
@@ -295,8 +307,9 @@ async function reservarNumero(id) {
         compradorNombre,
         estado: estadoVenta,
         precioBoleto: precio,
-        comisionTipo: vendedorData.comisionTipo,
-        comisionValor: vendedorData.comisionValor,
+        tieneComisiones: usaComisiones,
+        comisionTipo: usaComisiones ? vendedorData.comisionTipo : null,
+        comisionValor: usaComisiones ? vendedorData.comisionValor : 0,
         comision,
         fechaCreacion: serverTimestamp(),
         fechaAprobacion: vendedorData.ventaDirecta ? serverTimestamp() : null
@@ -305,10 +318,10 @@ async function reservarNumero(id) {
 
     // Si es venta directa, actualizar stats del vendedor
     if (vendedorData.ventaDirecta) {
-      await updateDoc(doc(db, 'vendedores', vendedorData.uid), {
-        totalVendidos:  increment(1),
-        totalGanancias: increment(comision)
-      });
+      const statsUpdate = usaComisiones
+        ? { totalVendidos: increment(1), totalGanancias: increment(comision) }
+        : { totalVendidos: increment(1) };
+      await updateDoc(doc(db, 'vendedores', vendedorData.uid), statsUpdate);
     }
 
     vBuscarInput.value = '';
