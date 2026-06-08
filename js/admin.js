@@ -43,7 +43,7 @@ const chkTieneComisiones = document.getElementById('v-tiene-comisiones');
 // ── Estado global ─────────────────────────────────
 let totalBoletos  = 2000;
 let precioBoleto  = 0;
-const numerosStateMap = new Map(); // id → estado completo (vendido, pendiente_aprobacion, etc.)
+const numerosStateMap = new Map(); // id → { estado, vendedorId }
 const unsubscribes = [];
 let editandoVendedorUid = null; // null = crear, uid = editar
 
@@ -161,9 +161,9 @@ function actualizarUIConfig() {
 function actualizarStatsAdmin() {
   let vendidos    = 0;
   let noDisponibles = 0;
-  numerosStateMap.forEach((estado) => {
-    if (estado === 'vendido') vendidos++;
-    if (estado !== 'disponible') noDisponibles++;
+  numerosStateMap.forEach((entry) => {
+    if (entry.estado === 'vendido') vendidos++;
+    if (entry.estado !== 'disponible') noDisponibles++;
   });
   statsVendidos.textContent    = vendidos;
   statsDisponibles.textContent = totalBoletos - noDisponibles;
@@ -179,7 +179,7 @@ btnGuardarConfig?.addEventListener('click', async () => {
   // Validar reducción: boletos comprometidos fuera del nuevo rango bloquean el cambio
   if (val < totalBoletos) {
     const boletos = [];
-    numerosStateMap.forEach((estado, id) => boletos.push({ numero: Number(id), estado }));
+    numerosStateMap.forEach((entry, id) => boletos.push({ numero: Number(id), estado: entry.estado }));
     const resultado = validarReduccionBoletos({ totalActual: totalBoletos, nuevoTotal: val, boletos });
     if (!resultado.puedeReducir) {
       mostrarConfigStatus(resultado.mensaje, 'error');
@@ -315,7 +315,7 @@ const ETIQUETAS_ESTADO = {
 
 function mostrarResultado(num) {
   const id           = String(num);
-  const estadoReal   = numerosStateMap.get(id) || 'disponible';
+  const estadoReal   = numerosStateMap.get(id)?.estado || 'disponible';
   const esDisponible = estadoReal === 'disponible';
   const esVendido    = estadoReal === 'vendido';
   // Para el CSS el card solo diferencia disponible vs no-disponible
@@ -352,8 +352,12 @@ async function toggleNumero(e) {
   btn.textContent = 'Guardando...';
   resultadoDiv.querySelector('.busqueda-error')?.remove();
 
+  // Capturar vendedorId antes de limpiar el boleto (solo al revertir)
+  const vendedorIdAnterior = estadoActual === 'vendido'
+    ? (numerosStateMap.get(id)?.vendedorId || null)
+    : null;
+
   try {
-    // El admin sobreescribe el estado y limpia datos de vendedor
     await setDoc(doc(db, 'numeros', id), {
       id: Number(id),
       estado: nuevoEstado,
@@ -362,7 +366,14 @@ async function toggleNumero(e) {
       fechaReserva: null
     });
 
-    numerosStateMap.set(id, nuevoEstado);
+    // Actualizar mapa local inmediatamente para que recalcularStatsVendedor use el estado nuevo
+    numerosStateMap.set(id, { estado: nuevoEstado, vendedorId: null });
+
+    // Si el boleto pertenecía a un vendedor, sincronizar sus stats en Firestore
+    if (vendedorIdAnterior) {
+      await recalcularStatsVendedor(vendedorIdAnterior);
+    }
+
     actualizarStatsAdmin();
     mostrarResultado(Number(id));
   } catch (err) {
@@ -372,6 +383,29 @@ async function toggleNumero(e) {
     resultadoDiv.appendChild(errorEl);
     btn.disabled = false;
     btn.textContent = estadoActual === 'vendido' ? 'Marcar como disponible' : 'Marcar como vendido';
+  }
+}
+
+// ── Recálculo de stats del vendedor ──────────────
+async function recalcularStatsVendedor(uid) {
+  try {
+    // totalVendidos: contar desde el mapa local (ya actualizado)
+    let totalVendidos = 0;
+    numerosStateMap.forEach((entry) => {
+      if (entry.estado === 'vendido' && entry.vendedorId === uid) totalVendidos++;
+    });
+
+    // totalGanancias: usar configuración vigente del vendedor + totalVendidos
+    const vendedorSnap = await getDoc(doc(db, 'vendedores', uid));
+    if (!vendedorSnap.exists()) return;
+    const v = vendedorSnap.data();
+    const totalGanancias = (v.tieneComisiones !== false)
+      ? calcularComision(v.comisionTipo, v.comisionValor, precioBoleto) * totalVendidos
+      : 0;
+
+    await updateDoc(doc(db, 'vendedores', uid), { totalVendidos, totalGanancias });
+  } catch (err) {
+    console.error('Error al recalcular stats del vendedor:', err);
   }
 }
 
@@ -474,7 +508,14 @@ function renderizarVendedores(vendedores) {
       ? (data.comisionTipo === 'fija' ? `$${data.comisionValor}` : `${data.comisionValor}%`)
       : '—';
     const estadoClass = data.estado === 'activo' ? 'badge-activo' : 'badge-inactivo';
-    const ganancias   = usaComisiones ? `$${(data.totalGanancias ?? 0).toFixed(2)}` : '—';
+    // Calcular desde el mapa local para reflejar siempre el estado real actual
+    const totalVendidos = [...numerosStateMap.values()]
+      .filter(e => e.estado === 'vendido' && e.vendedorId === uid)
+      .length;
+    const gananciasBruto = usaComisiones
+      ? calcularComision(data.comisionTipo, data.comisionValor, precioBoleto) * totalVendidos
+      : 0;
+    const ganancias = usaComisiones ? `$${gananciasBruto.toFixed(2)}` : '—';
     return `
       <tr>
         <td data-label="Nombre">${data.nombre}</td>
@@ -482,7 +523,7 @@ function renderizarVendedores(vendedores) {
         <td data-label="Estado"><span class="badge ${estadoClass}">${data.estado}</span></td>
         <td data-label="Comisión">${comisionStr}</td>
         <td data-label="Aprobación">${data.requiereAprobacion ? 'Requerida' : 'No requerida'}</td>
-        <td data-label="Vendidos">${data.totalVendidos ?? 0}</td>
+        <td data-label="Vendidos">${totalVendidos}</td>
         <td data-label="Ganancias">${ganancias}</td>
         <td data-label="Acciones" class="acciones-col">
           <button class="btn-ghost btn-sm btn-editar-vendedor" data-uid="${uid}">Editar</button>
@@ -653,7 +694,11 @@ function iniciarPanel() {
       if (change.type === 'removed') {
         numerosStateMap.delete(change.doc.id);
       } else {
-        numerosStateMap.set(change.doc.id, change.doc.data().estado || 'disponible');
+        const d = change.doc.data();
+        numerosStateMap.set(change.doc.id, {
+          estado:     d.estado     || 'disponible',
+          vendedorId: d.vendedorId || null
+        });
       }
     });
 
