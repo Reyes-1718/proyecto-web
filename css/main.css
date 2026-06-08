@@ -210,6 +210,22 @@ body {
   color: var(--accent-gold);
 }
 
+.vendedor-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  opacity: 0.35;
+  transition: opacity 0.2s;
+}
+
+.vendedor-link:hover {
+  opacity: 1;
+  color: var(--accent-gold);
+}
+
+
 /* ── Modal ───────────────────────────────────── */
 .modal-overlay {
   display: none;

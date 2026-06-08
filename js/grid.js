@@ -7,8 +7,9 @@ let TOTAL = 2000;
 const estadoMap = new Map();
 for (let i = 1; i <= TOTAL; i++) estadoMap.set(String(i), 'disponible');
 
-let modoVista = 'disponibles'; // 'disponibles' | 'todos'
+let modoVista = 'disponibles'; // 'disponibles' | 'vendidos' | 'todos'
 let mostrarTodosDisponibles = false;
+let mostrarTodosVendidos    = false;
 let datosCargados = false;
 let gridDiv = null;
 
@@ -22,6 +23,7 @@ const modalNumero      = document.getElementById('modal-numero');
 const modalClose       = document.getElementById('modal-close');
 const btnDisponibles   = document.getElementById('filtro-disponibles');
 const btnTodos         = document.getElementById('filtro-todos');
+const btnVendidos      = document.getElementById('filtro-vendidos');
 const infoGrilla       = document.getElementById('info-grilla');
 
 // reservado, pendiente_aprobacion y cancelado se muestran como no disponibles al público
@@ -143,6 +145,54 @@ function actualizarInfoDisponibles(total, limite) {
   });
 }
 
+// Devuelve array con los números no disponibles (vendidos, reservados, etc.)
+function getVendidosArray() {
+  const arr = [];
+  for (let i = 1; i <= TOTAL; i++) {
+    if (!estaDisponible(estadoMap.get(String(i)))) arr.push(i);
+  }
+  return arr;
+}
+
+// Renderiza solo los vendidos (limitado a 100 por defecto)
+function renderizarVendidos() {
+  const grid = getOrCreateGrid();
+  const vendidos = getVendidosArray();
+  const limite = mostrarTodosVendidos
+    ? vendidos.length
+    : Math.min(100, vendidos.length);
+
+  const fragment = document.createDocumentFragment();
+  vendidos.slice(0, limite).forEach((num, idx) => {
+    fragment.appendChild(crearCelda(num, idx));
+  });
+
+  grid.innerHTML = '';
+  grid.appendChild(fragment);
+  actualizarInfoVendidos(vendidos.length, limite);
+}
+
+function actualizarInfoVendidos(total, limite) {
+  if (!infoGrilla) return;
+
+  if (total === 0) {
+    infoGrilla.innerHTML = '<p class="info-texto">No hay números vendidos aún.</p>';
+    return;
+  }
+
+  const texto = `<p class="info-texto">Mostrando <strong>${limite}</strong> de <strong>${total}</strong> vendidos.</p>`;
+  const boton = (total > 100 && !mostrarTodosVendidos)
+    ? `<button class="btn-ver-mas" id="btn-ver-mas-vendidos">Ver todos los vendidos (${total})</button>`
+    : '';
+
+  infoGrilla.innerHTML = texto + boton;
+
+  document.getElementById('btn-ver-mas-vendidos')?.addEventListener('click', () => {
+    mostrarTodosVendidos = true;
+    renderizarVendidos();
+  });
+}
+
 // Actualiza los contadores del header
 function actualizarContadores() {
   let tomados = 0;
@@ -168,7 +218,18 @@ btnDisponibles?.addEventListener('click', () => {
   mostrarTodosDisponibles = false;
   btnDisponibles.classList.add('active');
   btnTodos.classList.remove('active');
+  btnVendidos.classList.remove('active');
   if (datosCargados) renderizarDisponibles();
+});
+
+btnVendidos?.addEventListener('click', () => {
+  if (modoVista === 'vendidos') return;
+  modoVista = 'vendidos';
+  mostrarTodosVendidos = false;
+  btnVendidos.classList.add('active');
+  btnDisponibles.classList.remove('active');
+  btnTodos.classList.remove('active');
+  if (datosCargados) renderizarVendidos();
 });
 
 btnTodos?.addEventListener('click', () => {
@@ -176,6 +237,7 @@ btnTodos?.addEventListener('click', () => {
   modoVista = 'todos';
   btnTodos.classList.add('active');
   btnDisponibles.classList.remove('active');
+  btnVendidos.classList.remove('active');
   if (datosCargados) renderizarTodos();
 });
 
@@ -222,6 +284,7 @@ async function iniciarEscucha() {
     });
 
     if (modoVista === 'disponibles') renderizarDisponibles();
+    else if (modoVista === 'vendidos') renderizarVendidos();
     actualizarContadores();
   }, (error) => {
     console.error('Error en tiempo real:', error);
