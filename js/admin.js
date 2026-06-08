@@ -1,5 +1,6 @@
 import { db, auth } from './firebase.js';
 import { iniciarSesion, cerrarSesion, escucharAuth, crearCuentaVendedor } from './auth.js';
+import { validarReduccionBoletos } from './reglas.js';
 import {
   collection, doc, setDoc, getDoc, updateDoc, addDoc,
   onSnapshot, query, where, serverTimestamp, runTransaction, increment
@@ -174,6 +175,18 @@ btnGuardarConfig?.addEventListener('click', async () => {
     mostrarConfigStatus('Ingresá un número entre 1 y 99.999.', 'error');
     return;
   }
+
+  // Validar reducción: boletos comprometidos fuera del nuevo rango bloquean el cambio
+  if (val < totalBoletos) {
+    const boletos = [];
+    numerosStateMap.forEach((estado, id) => boletos.push({ numero: Number(id), estado }));
+    const resultado = validarReduccionBoletos({ totalActual: totalBoletos, nuevoTotal: val, boletos });
+    if (!resultado.puedeReducir) {
+      mostrarConfigStatus(resultado.mensaje, 'error');
+      return;
+    }
+  }
+
   await guardarConfigField('total', val, () => {
     totalBoletos = val;
     actualizarUIConfig();
@@ -211,7 +224,8 @@ async function guardarConfigField(campo, valor, onSuccess) {
 
 function mostrarConfigStatus(msg, tipo) {
   if (!configStatus) return;
-  configStatus.textContent = msg;
+  // El mensaje puede incluir \n para listar boletos bloqueantes
+  configStatus.innerHTML = msg.replace(/\n/g, '<br>');
   configStatus.className = `config-status ${tipo}`;
 }
 
