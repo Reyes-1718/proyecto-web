@@ -282,7 +282,7 @@ loginForm?.addEventListener('submit', async (e) => {
   try {
     await iniciarSesion(email, password);
   } catch (err) {
-    loginError.textContent = traducirError(err.code);
+    loginError.textContent = traducirError(err.code) || 'Error al iniciar sesión.';
     btn.disabled = false;
     btn.textContent = 'Ingresar';
   }

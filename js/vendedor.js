@@ -6,23 +6,100 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 // ── DOM refs ──────────────────────────────────────
-const loginSection      = document.getElementById('login-section');
-const vendedorSection   = document.getElementById('vendedor-section');
-const loginForm         = document.getElementById('login-form');
-const loginError        = document.getElementById('login-error');
-const logoutBtn         = document.getElementById('logout-btn');
-const vNombreDisplay    = document.getElementById('v-nombre-display');
-const vBuscarInput      = document.getElementById('v-buscar-numero');
-const vResultadoDiv     = document.getElementById('v-resultado');
-const vStatsPendientes  = document.getElementById('v-stats-pendientes');
-const vStatsVendidos    = document.getElementById('v-stats-vendidos');
-const vStatsGanancias   = document.getElementById('v-stats-ganancias');
-const vListaBoletos     = document.getElementById('v-lista-boletos');
+const loginSection       = document.getElementById('login-section');
+const vendedorSection    = document.getElementById('vendedor-section');
+const loginForm          = document.getElementById('login-form');
+const loginError         = document.getElementById('login-error');
+const logoutBtn          = document.getElementById('logout-btn');
+const vNombreDisplay     = document.getElementById('v-nombre-display');
+const vBuscarInput       = document.getElementById('v-buscar-numero');
+const vResultadoDiv      = document.getElementById('v-resultado');
+const vStatsPendientes   = document.getElementById('v-stats-pendientes');
+const vStatsVendidos     = document.getElementById('v-stats-vendidos');
+const vStatsGanancias    = document.getElementById('v-stats-ganancias');
+const vListaBoletos      = document.getElementById('v-lista-boletos');
+const inactividadOverlay = document.getElementById('inactividad-overlay');
+const inactividadCuenta  = document.getElementById('inactividad-cuenta');
+const btnMantenerSesion  = document.getElementById('btn-mantener-sesion');
 
 // ── Estado ────────────────────────────────────────
 let vendedorData  = null;
 let configData    = { total: 2000, precio: 0 };
 const unsubscribes = [];
+
+// ── Inactividad ───────────────────────────────────
+const INACTIVIDAD_TIMEOUT = 10 * 60 * 1000;
+const INACTIVIDAD_AVISO   = 60 * 1000;
+
+let timerInactividad    = null;
+let timerCierre         = null;
+let cuentaAtrasInterval = null;
+let inactividadActiva   = false;
+let avisandoInactividad = false;
+
+const EVENTOS_ACTIVIDAD = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+
+function resetearInactividad() {
+  if (!inactividadActiva || avisandoInactividad) return;
+  clearTimeout(timerInactividad);
+  programarInactividad();
+}
+
+function programarInactividad() {
+  timerInactividad = setTimeout(mostrarAvisoInactividad, INACTIVIDAD_TIMEOUT - INACTIVIDAD_AVISO);
+}
+
+function mostrarAvisoInactividad() {
+  avisandoInactividad = true;
+  inactividadOverlay?.classList.remove('hidden');
+  let segundos = Math.floor(INACTIVIDAD_AVISO / 1000);
+  if (inactividadCuenta) inactividadCuenta.textContent = segundos;
+
+  clearInterval(cuentaAtrasInterval);
+  cuentaAtrasInterval = setInterval(() => {
+    segundos--;
+    if (inactividadCuenta) inactividadCuenta.textContent = Math.max(0, segundos);
+    if (segundos <= 0) clearInterval(cuentaAtrasInterval);
+  }, 1000);
+
+  timerCierre = setTimeout(async () => {
+    clearInterval(cuentaAtrasInterval);
+    await cerrarSesion();
+  }, INACTIVIDAD_AVISO);
+}
+
+function ocultarAvisoInactividad() {
+  inactividadOverlay?.classList.add('hidden');
+}
+
+function iniciarInactividad() {
+  inactividadActiva = true;
+  avisandoInactividad = false;
+  EVENTOS_ACTIVIDAD.forEach(ev =>
+    document.addEventListener(ev, resetearInactividad, { passive: true })
+  );
+  programarInactividad();
+}
+
+function detenerInactividad() {
+  inactividadActiva = false;
+  avisandoInactividad = false;
+  clearTimeout(timerInactividad);
+  clearTimeout(timerCierre);
+  clearInterval(cuentaAtrasInterval);
+  ocultarAvisoInactividad();
+  EVENTOS_ACTIVIDAD.forEach(ev =>
+    document.removeEventListener(ev, resetearInactividad)
+  );
+}
+
+btnMantenerSesion?.addEventListener('click', () => {
+  clearTimeout(timerCierre);
+  clearInterval(cuentaAtrasInterval);
+  ocultarAvisoInactividad();
+  avisandoInactividad = false;
+  programarInactividad();
+});
 
 // ── Auth ──────────────────────────────────────────
 const EMAIL_REGEX = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
@@ -46,7 +123,9 @@ escucharAuth(async (user) => {
     loginSection.classList.add('hidden');
     vendedorSection.classList.remove('hidden');
     iniciarPanelVendedor();
+    iniciarInactividad();
   } else {
+    detenerInactividad();
     unsubscribes.forEach(u => u());
     unsubscribes.length = 0;
     vendedorData = null;
@@ -82,11 +161,7 @@ loginForm?.addEventListener('submit', async (e) => {
   try {
     await iniciarSesion(email, password);
   } catch (err) {
-    const mapa = {
-      'auth/invalid-credential': 'Credenciales incorrectas.',
-      'auth/too-many-requests':  'Demasiados intentos. Intentá más tarde.',
-    };
-    loginError.textContent = mapa[err.code] || 'Error al iniciar sesión.';
+    loginError.textContent = traducirError(err.code) || 'Error al iniciar sesión.';
     btn.disabled = false;
     btn.textContent = 'Ingresar';
   }
@@ -339,4 +414,17 @@ async function reservarNumero(id) {
     btn.disabled = false;
     btn.textContent = vendedorData.ventaDirecta ? 'Vender' : 'Reservar';
   }
+}
+
+function traducirError(code) {
+  const mapa = {
+    'auth/invalid-email':       'Email inválido.',
+    'auth/user-not-found':      'Usuario no encontrado.',
+    'auth/wrong-password':      'Contraseña incorrecta.',
+    'auth/invalid-credential':  'Credenciales incorrectas.',
+    'auth/too-many-requests':   'Demasiados intentos. Intentá más tarde.',
+    'auth/user-disabled':       'Esta cuenta fue deshabilitada.',
+    'auth/network-request-failed': 'Sin conexión. Revisá tu red.',
+  };
+  return mapa[code] || null;
 }
