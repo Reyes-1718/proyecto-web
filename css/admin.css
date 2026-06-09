@@ -58,7 +58,7 @@
   margin-bottom: var(--space-md);
 }
 
-.form-group label {
+.form-group > label {
   display: block;
   font-size: 0.68rem;
   letter-spacing: 0.15em;
@@ -67,7 +67,7 @@
   margin-bottom: 6px;
 }
 
-.form-group input {
+.form-group > input {
   width: 100%;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border);
@@ -80,12 +80,12 @@
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.form-group input:focus {
+.form-group > input:focus {
   border-color: var(--accent-gold);
   box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.1);
 }
 
-.form-group input::placeholder {
+.form-group > input::placeholder {
   color: #333;
 }
 
