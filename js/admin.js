@@ -586,8 +586,9 @@ async function abrirModalEditar(uid) {
     document.getElementById('v-tiene-comisiones').checked    = tieneComisiones;
     document.getElementById('v-comision-tipo').value  = d.comisionTipo || 'porcentaje';
     document.getElementById('v-comision-valor').value = d.comisionValor ?? 0;
-    document.getElementById('v-requiere-aprobacion').checked = d.requiereAprobacion ?? true;
-    document.getElementById('v-venta-directa').checked       = d.ventaDirecta ?? false;
+    const modoActual = (d.ventaDirecta ?? false) ? 'directa' : 'aprobacion';
+    const radioModo  = document.querySelector(`input[name="modo-venta"][value="${modoActual}"]`);
+    if (radioModo) radioModo.checked = true;
     camposComision?.classList.toggle('hidden', !tieneComisiones);
   } catch (err) {
     if (errorVendedor) errorVendedor.textContent = 'Error al cargar datos: ' + err.message;
@@ -623,8 +624,9 @@ formVendedor?.addEventListener('submit', async (e) => {
   const comisionTipo       = tieneComisiones ? document.getElementById('v-comision-tipo').value : null;
   const comisionValorRaw   = parseFloat(document.getElementById('v-comision-valor').value);
   const comisionValor      = tieneComisiones ? comisionValorRaw : 0;
-  const requiereAprobacion = document.getElementById('v-requiere-aprobacion').checked;
-  const ventaDirecta       = document.getElementById('v-venta-directa').checked;
+  const modoVenta          = document.querySelector('input[name="modo-venta"]:checked')?.value || 'aprobacion';
+  const requiereAprobacion = modoVenta === 'aprobacion';
+  const ventaDirecta       = modoVenta === 'directa';
 
   if (!nombre) {
     if (errorVendedor) errorVendedor.textContent = 'El nombre es obligatorio.';

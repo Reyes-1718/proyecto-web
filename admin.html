@@ -229,15 +229,18 @@
             </div>
           </div>
 
-          <div class="form-checks">
-            <label class="check-label">
-              <input type="checkbox" id="v-requiere-aprobacion" checked>
-              <span>Requiere aprobación del admin</span>
-            </label>
-            <label class="check-label">
-              <input type="checkbox" id="v-venta-directa">
-              <span>Puede vender directamente</span>
-            </label>
+          <div class="form-group">
+            <label>Modo de venta</label>
+            <div class="form-checks">
+              <label class="check-label">
+                <input type="radio" name="modo-venta" id="v-modo-aprobacion" value="aprobacion" checked>
+                <span>Requiere aprobación del admin</span>
+              </label>
+              <label class="check-label">
+                <input type="radio" name="modo-venta" id="v-modo-directa" value="directa">
+                <span>Puede vender directamente</span>
+              </label>
+            </div>
           </div>
 
           <p class="login-error" id="error-vendedor" role="alert"></p>

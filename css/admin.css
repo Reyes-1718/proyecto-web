@@ -808,7 +808,8 @@
   color: var(--text-muted);
 }
 
-.check-label input[type="checkbox"] {
+.check-label input[type="checkbox"],
+.check-label input[type="radio"] {
   width: 16px;
   height: 16px;
   accent-color: var(--accent-gold);

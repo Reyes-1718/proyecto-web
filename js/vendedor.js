@@ -295,14 +295,27 @@ function renderizarMisBoletos(boletos) {
 
 // ── Búsqueda y reserva de número ──────────────────
 let estadosBoletos = new Map(); // caché local
+let unsubNumeroActual = null;   // listener del número mostrado actualmente
+
+function limpiarListenerNumero() {
+  if (unsubNumeroActual) {
+    unsubNumeroActual();
+    unsubNumeroActual = null;
+  }
+}
 
 vBuscarInput?.addEventListener('input', () => {
   const val = vBuscarInput.value.trim();
-  if (!val) { vResultadoDiv.innerHTML = ''; return; }
+  if (!val) {
+    limpiarListenerNumero();
+    vResultadoDiv.innerHTML = '';
+    return;
+  }
 
   const num = parseInt(val);
   const total = configData.total || 2000;
   if (isNaN(num) || num < 1 || num > total) {
+    limpiarListenerNumero();
     vResultadoDiv.innerHTML = `<p class="busqueda-error">Número inválido (1 – ${total})</p>`;
     return;
   }
@@ -311,10 +324,11 @@ vBuscarInput?.addEventListener('input', () => {
 });
 
 function mostrarResultadoVendedor(num) {
-  const id     = String(num);
-  const estado = estadosBoletos.get(id) || 'disponible';
-  const disponible = estado === 'disponible';
+  limpiarListenerNumero();
 
+  const id         = String(num);
+  const estado     = estadosBoletos.get(id) || 'disponible';
+  const disponible = estado === 'disponible';
   const tipoAccion = vendedorData?.ventaDirecta ? 'Vender' : 'Reservar';
 
   vResultadoDiv.innerHTML = disponible ? `
@@ -336,6 +350,20 @@ function mostrarResultadoVendedor(num) {
   if (disponible) {
     vResultadoDiv.querySelector('.btn-reservar')
       ?.addEventListener('click', () => reservarNumero(id));
+
+    // Escucha cambios en tiempo real: si otro vendedor toma este número, actualiza la UI
+    unsubNumeroActual = onSnapshot(doc(db, 'numeros', id), (snap) => {
+      const estadoActual = snap.exists() ? snap.data().estado : 'disponible';
+      if (estadoActual !== 'disponible') {
+        limpiarListenerNumero();
+        vResultadoDiv.innerHTML = `
+          <div class="resultado-card vendido">
+            <span class="resultado-numero">${num}</span>
+            <span class="resultado-estado">No disponible</span>
+          </div>
+        `;
+      }
+    });
   }
 }
 
@@ -399,6 +427,7 @@ async function reservarNumero(id) {
       await updateDoc(doc(db, 'vendedores', vendedorData.uid), statsUpdate);
     }
 
+    limpiarListenerNumero();
     vBuscarInput.value = '';
     vResultadoDiv.innerHTML = `
       <div class="resultado-card disponible">
