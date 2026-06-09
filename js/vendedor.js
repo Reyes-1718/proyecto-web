@@ -1,5 +1,6 @@
 import { db, auth } from './firebase.js';
 import { iniciarSesion, cerrarSesion, escucharAuth } from './auth.js';
+import { escapeHTML } from './sanitizar.js';
 import {
   collection, doc, getDoc, setDoc, updateDoc,
   onSnapshot, query, where, serverTimestamp, runTransaction, increment
@@ -267,6 +268,8 @@ function renderizarMisBoletos(boletos) {
     'cancelado':             'Cancelado',
   };
 
+  // Los datos provenientes de Firestore se escapan antes de interpolarse
+  // en el HTML para prevenir XSS almacenado.
   vListaBoletos.innerHTML = boletos
     .sort((a, b) => Number(a.id) - Number(b.id))
     .map(b => {
@@ -279,14 +282,14 @@ function renderizarMisBoletos(boletos) {
 
       return `
         <div class="pendiente-card">
-          <div class="pendiente-numero">${b.id}</div>
+          <div class="pendiente-numero">${escapeHTML(b.id)}</div>
           <div class="pendiente-detalles">
-            <p><span class="detalle-label">Comprador:</span> ${b.compradorNombre || '—'}</p>
-            <p><span class="detalle-label">Fecha:</span> ${fecha}</p>
+            <p><span class="detalle-label">Comprador:</span> ${escapeHTML(b.compradorNombre) || '—'}</p>
+            <p><span class="detalle-label">Fecha:</span> ${escapeHTML(fecha)}</p>
             ${lineaComision}
           </div>
           <div class="pendiente-acciones">
-            <span class="estado-badge ${estadoClass}">${etiquetaEstado[b.estado] || b.estado}</span>
+            <span class="estado-badge ${estadoClass}">${etiquetaEstado[b.estado] || escapeHTML(b.estado)}</span>
           </div>
         </div>
       `;
@@ -439,7 +442,8 @@ async function reservarNumero(id) {
     setTimeout(() => { vResultadoDiv.innerHTML = ''; }, 4000);
 
   } catch (err) {
-    vResultadoDiv.innerHTML = `<p class="busqueda-error">${err.message}</p>`;
+    // err.message puede incluir texto de Firebase: escapar antes de insertar
+    vResultadoDiv.innerHTML = `<p class="busqueda-error">${escapeHTML(err.message)}</p>`;
     btn.disabled = false;
     btn.textContent = vendedorData.ventaDirecta ? 'Vender' : 'Reservar';
   }

@@ -1,6 +1,7 @@
 import { db, auth } from './firebase.js';
 import { iniciarSesion, cerrarSesion, escucharAuth, crearCuentaVendedor } from './auth.js';
 import { validarReduccionBoletos } from './reglas.js';
+import { escapeHTML } from './sanitizar.js';
 import {
   collection, doc, setDoc, getDoc, updateDoc, addDoc,
   onSnapshot, query, where, serverTimestamp, runTransaction, increment
@@ -224,8 +225,9 @@ async function guardarConfigField(campo, valor, onSuccess) {
 
 function mostrarConfigStatus(msg, tipo) {
   if (!configStatus) return;
-  // El mensaje puede incluir \n para listar boletos bloqueantes
-  configStatus.innerHTML = msg.replace(/\n/g, '<br>');
+  // El mensaje puede incluir \n para listar boletos bloqueantes.
+  // Se escapa antes de insertar para evitar inyección de HTML.
+  configStatus.innerHTML = escapeHTML(msg).replace(/\n/g, '<br>');
   configStatus.className = `config-status ${tipo}`;
 }
 
@@ -320,7 +322,8 @@ function mostrarResultado(num) {
   const esVendido    = estadoReal === 'vendido';
   // Para el CSS el card solo diferencia disponible vs no-disponible
   const claseCard    = esDisponible ? 'disponible' : 'vendido';
-  const etiqueta     = ETIQUETAS_ESTADO[estadoReal] || estadoReal;
+  // estadoReal viene de Firestore: escapar el fallback por si contiene HTML
+  const etiqueta     = ETIQUETAS_ESTADO[estadoReal] || escapeHTML(estadoReal);
 
   // Solo el admin puede forzar toggle en disponible ↔ vendido
   const botonToggle = (esDisponible || esVendido)
@@ -423,27 +426,31 @@ function renderizarPendientes(pendientes) {
     return;
   }
 
+  // Todos los valores provenientes de Firestore se escapan antes de
+  // interpolarse en el HTML (compradorNombre/vendedorNombre los escribe
+  // un vendedor y podrían contener payloads XSS).
   listaPendientes.innerHTML = pendientes.map(({ id, data }) => {
     const usaComisiones = data.tieneComisiones !== false;
     const comisionEst   = usaComisiones
       ? calcularComision(data.comisionTipo, data.comisionValor, data.precioBoleto).toFixed(2)
       : null;
-    const fecha = data.fechaCreacion?.toDate?.()?.toLocaleDateString('es-AR') ?? '—';
+    const fecha  = data.fechaCreacion?.toDate?.()?.toLocaleDateString('es-AR') ?? '—';
+    const precio = escapeHTML(data.precioBoleto);
     const lineaPrecio = usaComisiones
-      ? `<p><span class="detalle-label">Precio:</span> $${data.precioBoleto} &nbsp;|&nbsp; Comisión est.: $${comisionEst}</p>`
-      : `<p><span class="detalle-label">Precio:</span> $${data.precioBoleto}</p>`;
+      ? `<p><span class="detalle-label">Precio:</span> $${precio} &nbsp;|&nbsp; Comisión est.: $${escapeHTML(comisionEst)}</p>`
+      : `<p><span class="detalle-label">Precio:</span> $${precio}</p>`;
     return `
       <div class="pendiente-card">
-        <div class="pendiente-numero">${data.numeroId}</div>
+        <div class="pendiente-numero">${escapeHTML(data.numeroId)}</div>
         <div class="pendiente-detalles">
-          <p><span class="detalle-label">Comprador:</span> ${data.compradorNombre || '—'}</p>
-          <p><span class="detalle-label">Vendedor:</span> ${data.vendedorNombre}</p>
-          <p><span class="detalle-label">Fecha:</span> ${fecha}</p>
+          <p><span class="detalle-label">Comprador:</span> ${escapeHTML(data.compradorNombre) || '—'}</p>
+          <p><span class="detalle-label">Vendedor:</span> ${escapeHTML(data.vendedorNombre)}</p>
+          <p><span class="detalle-label">Fecha:</span> ${escapeHTML(fecha)}</p>
           ${lineaPrecio}
         </div>
         <div class="pendiente-acciones">
-          <button class="btn-aprobar"  data-id="${id}" data-numero="${data.numeroId}" data-vendedor="${data.vendedorId}" data-tipo="${data.comisionTipo}" data-valor="${data.comisionValor}" data-precio="${data.precioBoleto}" data-tiene-comisiones="${usaComisiones}">Aprobar</button>
-          <button class="btn-rechazar" data-id="${id}" data-numero="${data.numeroId}">Rechazar</button>
+          <button class="btn-aprobar"  data-id="${escapeHTML(id)}" data-numero="${escapeHTML(data.numeroId)}" data-vendedor="${escapeHTML(data.vendedorId)}" data-tipo="${escapeHTML(data.comisionTipo)}" data-valor="${escapeHTML(data.comisionValor)}" data-precio="${precio}" data-tiene-comisiones="${usaComisiones}">Aprobar</button>
+          <button class="btn-rechazar" data-id="${escapeHTML(id)}" data-numero="${escapeHTML(data.numeroId)}">Rechazar</button>
         </div>
       </div>
     `;
@@ -516,19 +523,20 @@ function renderizarVendedores(vendedores) {
       ? calcularComision(data.comisionTipo, data.comisionValor, precioBoleto) * totalVendidos
       : 0;
     const ganancias = usaComisiones ? `$${gananciasBruto.toFixed(2)}` : '—';
+    // Nombre, contacto y estado provienen de Firestore: se escapan para evitar XSS
     return `
       <tr>
-        <td data-label="Nombre">${data.nombre}</td>
-        <td data-label="Contacto">${data.contacto || '—'}</td>
-        <td data-label="Estado"><span class="badge ${estadoClass}">${data.estado}</span></td>
-        <td data-label="Comisión">${comisionStr}</td>
+        <td data-label="Nombre">${escapeHTML(data.nombre)}</td>
+        <td data-label="Contacto">${escapeHTML(data.contacto) || '—'}</td>
+        <td data-label="Estado"><span class="badge ${estadoClass}">${escapeHTML(data.estado)}</span></td>
+        <td data-label="Comisión">${escapeHTML(comisionStr)}</td>
         <td data-label="Aprobación">${data.requiereAprobacion ? 'Requerida' : 'No requerida'}</td>
         <td data-label="Vendidos">${totalVendidos}</td>
-        <td data-label="Ganancias">${ganancias}</td>
+        <td data-label="Ganancias">${escapeHTML(ganancias)}</td>
         <td data-label="Acciones" class="acciones-col">
-          <button class="btn-ghost btn-sm btn-editar-vendedor" data-uid="${uid}">Editar</button>
+          <button class="btn-ghost btn-sm btn-editar-vendedor" data-uid="${escapeHTML(uid)}">Editar</button>
           <button class="btn-ghost btn-sm ${data.estado === 'activo' ? 'danger' : ''} btn-toggle-vendedor"
-            data-uid="${uid}" data-estado="${data.estado}">
+            data-uid="${escapeHTML(uid)}" data-estado="${escapeHTML(data.estado)}">
             ${data.estado === 'activo' ? 'Desactivar' : 'Activar'}
           </button>
         </td>

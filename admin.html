@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- CSP: restringe orígenes de scripts, estilos y conexiones para mitigar XSS -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com; base-uri 'self'; object-src 'none'; form-action 'self'">
   <title>Panel Admin — Rifa 2025</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -45,7 +47,7 @@
       </div>
       <div class="admin-header-right">
         <span class="inactividad-badge">Sesión activa</span>
-        <a href="index.html" class="btn-ghost" target="_blank">Ver grilla pública</a>
+        <a href="index.html" class="btn-ghost" target="_blank" rel="noopener noreferrer">Ver grilla pública</a>
         <button id="logout-btn" class="btn-ghost danger">Cerrar sesión</button>
       </div>
     </header>
@@ -181,7 +183,7 @@
     <div id="modal-vendedor" class="inactividad-overlay hidden"
       role="dialog" aria-modal="true" aria-labelledby="modal-vendedor-titulo">
       <div class="inactividad-modal modal-vendedor-card">
-        <h2 id="modal-vendedor-titulo" class="inactividad-titulo" id="titulo-modal-vendedor">Nuevo vendedor</h2>
+        <h2 id="modal-vendedor-titulo" class="inactividad-titulo">Nuevo vendedor</h2>
         <form id="form-vendedor" novalidate>
 
           <div class="form-group">

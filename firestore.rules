@@ -1,0 +1,132 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────
+// Reglas de seguridad de Firestore — Rifa Digital
+//
+// Modelo de roles (mínimo privilegio):
+//  - Público (sin auth):  solo lectura de `numeros` y `config`
+//    (necesario para la grilla pública en index.html).
+//  - Vendedor:            usuario con documento en `vendedores/{uid}`
+//    y estado "activo". Solo puede tomar números libres para sí
+//    mismo y registrar su venta.
+//  - Admin:               usuario cuyo UID existe en `admins/{uid}`.
+//    ⚠ IMPORTANTE: crear manualmente en Firebase Console un
+//    documento en la colección `admins` cuyo ID sea el UID del
+//    administrador (el contenido puede ser { rol: "admin" }).
+//    Sin ese documento el panel admin no podrá escribir.
+// ─────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function vendedorDoc() {
+      return get(/databases/$(database)/documents/vendedores/$(request.auth.uid)).data;
+    }
+
+    function isVendedorActivo() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/vendedores/$(request.auth.uid))
+        && vendedorDoc().estado == 'activo';
+    }
+
+    // ── Administradores ──────────────────────────────
+    // Solo lectura del propio documento (para posibles checks de rol).
+    // La escritura se hace únicamente desde Firebase Console.
+    match /admins/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // ── Configuración del sorteo ─────────────────────
+    // La grilla pública necesita leer el total de boletos.
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── Números / boletos ────────────────────────────
+    match /numeros/{numeroId} {
+      // Lectura pública: la grilla muestra disponibles/vendidos sin login.
+      allow read: if true;
+
+      // El admin puede escribir cualquier estado.
+      allow create, update, delete: if isAdmin();
+
+      // Un vendedor activo solo puede:
+      //  - tomar un número que NO exista aún (disponible por defecto), o
+      //  - actualizar uno cuyo estado actual sea "disponible",
+      //  - asignándoselo a sí mismo,
+      //  - con el estado que corresponde a su modo de venta.
+      allow create: if isVendedorActivo()
+        && request.resource.data.vendedorId == request.auth.uid
+        && (
+             (vendedorDoc().ventaDirecta == true  && request.resource.data.estado == 'vendido') ||
+             (vendedorDoc().ventaDirecta != true  && request.resource.data.estado == 'pendiente_aprobacion')
+           );
+
+      allow update: if isVendedorActivo()
+        && resource.data.estado == 'disponible'
+        && request.resource.data.vendedorId == request.auth.uid
+        && (
+             (vendedorDoc().ventaDirecta == true  && request.resource.data.estado == 'vendido') ||
+             (vendedorDoc().ventaDirecta != true  && request.resource.data.estado == 'pendiente_aprobacion')
+           );
+    }
+
+    // ── Ventas ───────────────────────────────────────
+    match /ventas/{ventaId} {
+      // Solo admin (lista de pendientes) o el vendedor dueño de la venta.
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.vendedorId == request.auth.uid);
+
+      // El vendedor activo crea su propia venta con estado coherente
+      // a su modo de venta. El admin también puede crear si hiciera falta.
+      allow create: if isAdmin()
+        || (
+             isVendedorActivo()
+             && request.resource.data.vendedorId == request.auth.uid
+             && (
+                  (vendedorDoc().ventaDirecta == true  && request.resource.data.estado == 'aprobada') ||
+                  (vendedorDoc().ventaDirecta != true  && request.resource.data.estado == 'pendiente_aprobacion')
+                )
+           );
+
+      // Aprobar / rechazar: solo admin.
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Vendedores ───────────────────────────────────
+    match /vendedores/{uid} {
+      // El admin ve todos; cada vendedor solo su propio perfil.
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
+
+      // Alta, edición y baja de vendedores: solo admin.
+      allow create, delete: if isAdmin();
+
+      // El vendedor solo puede actualizar sus contadores de estadísticas
+      // (venta directa incrementa totalVendidos/totalGanancias).
+      // Nunca puede tocar comisiones, estado ni modo de venta.
+      allow update: if isAdmin()
+        || (
+             isSignedIn()
+             && request.auth.uid == uid
+             && request.resource.data.diff(resource.data).affectedKeys()
+                  .hasOnly(['totalVendidos', 'totalGanancias'])
+           );
+    }
+
+    // ── Denegar todo lo demás ────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
