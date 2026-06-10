@@ -38,6 +38,14 @@ service cloud.firestore {
         && vendedorDoc().estado == 'activo';
     }
 
+    // Valida que el `estado` enviado sea coherente con el modo de venta del
+    // vendedor: en venta directa se exige `estadoDirecta`; con aprobación,
+    // `estadoAprobacion`. Centraliza la regla usada por numeros y ventas.
+    function estadoSegunModo(estado, estadoDirecta, estadoAprobacion) {
+      return (vendedorDoc().ventaDirecta == true  && estado == estadoDirecta)
+          || (vendedorDoc().ventaDirecta != true  && estado == estadoAprobacion);
+    }
+
     // ── Administradores ──────────────────────────────
     // Solo lectura del propio documento (para posibles checks de rol).
     // La escritura se hace únicamente desde Firebase Console.
@@ -68,18 +76,12 @@ service cloud.firestore {
       //  - con el estado que corresponde a su modo de venta.
       allow create: if isVendedorActivo()
         && request.resource.data.vendedorId == request.auth.uid
-        && (
-             (vendedorDoc().ventaDirecta == true  && request.resource.data.estado == 'vendido') ||
-             (vendedorDoc().ventaDirecta != true  && request.resource.data.estado == 'pendiente_aprobacion')
-           );
+        && estadoSegunModo(request.resource.data.estado, 'vendido', 'pendiente_aprobacion');
 
       allow update: if isVendedorActivo()
         && resource.data.estado == 'disponible'
         && request.resource.data.vendedorId == request.auth.uid
-        && (
-             (vendedorDoc().ventaDirecta == true  && request.resource.data.estado == 'vendido') ||
-             (vendedorDoc().ventaDirecta != true  && request.resource.data.estado == 'pendiente_aprobacion')
-           );
+        && estadoSegunModo(request.resource.data.estado, 'vendido', 'pendiente_aprobacion');
     }
 
     // ── Ventas ───────────────────────────────────────
@@ -94,10 +96,7 @@ service cloud.firestore {
         || (
              isVendedorActivo()
              && request.resource.data.vendedorId == request.auth.uid
-             && (
-                  (vendedorDoc().ventaDirecta == true  && request.resource.data.estado == 'aprobada') ||
-                  (vendedorDoc().ventaDirecta != true  && request.resource.data.estado == 'pendiente_aprobacion')
-                )
+             && estadoSegunModo(request.resource.data.estado, 'aprobada', 'pendiente_aprobacion')
            );
 
       // Aprobar / rechazar: solo admin.
@@ -115,12 +114,25 @@ service cloud.firestore {
       // El vendedor solo puede actualizar sus contadores de estadísticas
       // (venta directa incrementa totalVendidos/totalGanancias).
       // Nunca puede tocar comisiones, estado ni modo de venta.
+      //
+      // Además de limitar QUÉ claves cambia, se acota CÓMO cambian para que
+      // no pueda inflar sus cifras a un valor arbitrario desde la consola:
+      //  - debe seguir activo,
+      //  - los contadores deben ser numéricos,
+      //  - totalVendidos solo puede subir de a 1 (coincide con increment(1)),
+      //  - totalGanancias nunca puede bajar (la comisión es >= 0).
+      // Nota: esto refleja el contrato actual del cliente (una venta = +1).
+      // Si se agrega venta en lote habrá que relajar el "+1" exacto.
       allow update: if isAdmin()
         || (
-             isSignedIn()
+             isVendedorActivo()
              && request.auth.uid == uid
              && request.resource.data.diff(resource.data).affectedKeys()
                   .hasOnly(['totalVendidos', 'totalGanancias'])
+             && request.resource.data.totalVendidos is number
+             && request.resource.data.totalGanancias is number
+             && request.resource.data.totalVendidos == resource.data.totalVendidos + 1
+             && request.resource.data.totalGanancias >= resource.data.totalGanancias
            );
     }
 
