@@ -1,0 +1,5 @@
+# Configuración local de herramientas (no debe versionarse)
+.claude/settings.local.json
+
+# Notas / prompts locales
+pront.md

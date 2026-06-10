@@ -288,10 +288,11 @@ async function iniciarEscucha() {
     actualizarContadores();
   }, (error) => {
     console.error('Error en tiempo real:', error);
-    gridContainer.insertAdjacentHTML('afterbegin', `
-      <p style="color:#e06060;text-align:center;padding:var(--space-md)">
-        Sin conexión en tiempo real: ${error.message}
-      </p>`);
+    // Construir el mensaje con textContent para no inyectar HTML del error
+    const aviso = document.createElement('p');
+    aviso.style.cssText = 'color:#e06060;text-align:center;padding:var(--space-md)';
+    aviso.textContent = `Sin conexión en tiempo real: ${error.message}`;
+    gridContainer.prepend(aviso);
   });
 }
 
