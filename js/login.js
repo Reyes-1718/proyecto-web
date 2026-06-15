@@ -31,6 +31,25 @@ export async function loginConGoogle() {
   return signInWithPopup(auth, provider);
 }
 
+// Traduce los códigos de error más comunes del login con Google a un mensaje
+// claro. Incluye el código entre paréntesis para facilitar el diagnóstico.
+export function traducirErrorGoogle(code) {
+  const mapa = {
+    'auth/operation-not-allowed':
+      'El proveedor Google no está habilitado en Firebase (Authentication → Sign-in method).',
+    'auth/unauthorized-domain':
+      'Este dominio no está autorizado. Abrí el sitio desde http://localhost (no 127.0.0.1) o agregá el dominio en Authentication → Settings → Authorized domains.',
+    'auth/popup-blocked':
+      'El navegador bloqueó la ventana emergente. Permití los popups para este sitio.',
+    'auth/network-request-failed':
+      'Sin conexión o bloqueado por la red. Revisá tu conexión y la consola por errores de CSP.',
+    'auth/internal-error':
+      'Error interno de autenticación. Revisá la consola del navegador para más detalle.',
+  };
+  const base = mapa[code] || 'No se pudo iniciar sesión con Google.';
+  return code ? `${base} (${code})` : base;
+}
+
 // Crea solicitudesAcceso/{uid} solo si el usuario no tiene rol todavía.
 // Las reglas exigen que NO exista doc en admins ni en vendedores, por lo
 // que esta función solo debe llamarse cuando ya verificamos esa condición.

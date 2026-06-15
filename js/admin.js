@@ -1,6 +1,6 @@
 import { db, auth } from './firebase.js';
 import { iniciarSesion, cerrarSesion, escucharAuth, crearCuentaVendedor } from './auth.js';
-import { loginConGoogle, redirigirSegunRol } from './login.js';
+import { redirigirSegunRol } from './login.js';
 import { validarReduccionBoletos } from './reglas.js';
 import { escapeHTML } from './sanitizar.js';
 import {
@@ -13,7 +13,6 @@ const loginSection       = document.getElementById('login-section');
 const adminSection       = document.getElementById('admin-section');
 const loginForm          = document.getElementById('login-form');
 const loginError         = document.getElementById('login-error');
-const btnGoogle          = document.getElementById('btn-google');
 const logoutBtn          = document.getElementById('logout-btn');
 const buscarInput        = document.getElementById('buscar-numero');
 const resultadoDiv       = document.getElementById('resultado-busqueda');
@@ -246,13 +245,31 @@ escucharAuth(async (user) => {
     // un usuario nuevo de Google sin rol) se enruta a donde corresponde.
     // La protección real está en las reglas; esto es UX + evita mostrar
     // el panel a quien no es admin (ver §15 de google-notas.md).
+    let esAdmin = false;
     try {
       const adminSnap = await getDoc(doc(db, 'admins', user.uid));
-      if (!adminSnap.exists()) {
+      esAdmin = adminSnap.exists();
+    } catch (err) {
+      // Sin conexión no podemos verificar. Las reglas siguen protegiendo
+      // (un no-admin no podrá escribir), así que mostramos el panel como
+      // fallback en vez de bloquear a un admin legítimo.
+      console.error('No se pudo verificar el rol de admin:', err);
+      esAdmin = true;
+    }
+
+    // No es admin: enrutar (vendedor → su panel; sin rol → solicitud + pendiente).
+    // Los errores de este paso NO deben silenciarse: si la solicitud no se
+    // puede crear, hay que avisar y cerrar sesión en lugar de mostrar el panel.
+    if (!esAdmin) {
+      try {
         await redirigirSegunRol(user, { current: 'admin' });
-        return;
+      } catch (err) {
+        console.error('Error al registrar la solicitud de acceso:', err);
+        loginError.textContent = 'No se pudo registrar tu solicitud de acceso. Intentá de nuevo.';
+        await cerrarSesion();
       }
-    } catch (_) { /* sin conexión: continuar; las reglas siguen protegiendo */ }
+      return;
+    }
 
     loginSection.classList.add('hidden');
     adminSection.classList.remove('hidden');
@@ -267,7 +284,6 @@ escucharAuth(async (user) => {
     loginError.textContent = '';
     const btn = loginForm?.querySelector('button[type="submit"]');
     if (btn) { btn.disabled = false; btn.textContent = 'Ingresar'; }
-    if (btnGoogle) btnGoogle.disabled = false;
   }
 });
 
@@ -302,21 +318,6 @@ loginForm?.addEventListener('submit', async (e) => {
 
 logoutBtn?.addEventListener('click', async () => {
   await cerrarSesion();
-});
-
-// Login con Google. El enrutamiento por rol lo resuelve escucharAuth.
-btnGoogle?.addEventListener('click', async () => {
-  loginError.textContent = '';
-  btnGoogle.disabled = true;
-  try {
-    await loginConGoogle();
-  } catch (err) {
-    if (err?.code !== 'auth/popup-closed-by-user' &&
-        err?.code !== 'auth/cancelled-popup-request') {
-      loginError.textContent = 'No se pudo iniciar sesión con Google.';
-    }
-    btnGoogle.disabled = false;
-  }
 });
 
 // ── Búsqueda de número ────────────────────────────

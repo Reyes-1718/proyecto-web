@@ -156,7 +156,12 @@ service cloud.firestore {
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.estado == 'pendiente';
 
-      allow read: if isAdmin();
+      // El admin lee todas (lista de pendientes); cada usuario puede leer
+      // SOLO su propia solicitud. Esto es necesario para que el cliente
+      // verifique si ya existe antes de crearla (crearSolicitudSiNoExiste);
+      // sin la auto-lectura, ese getDoc se rechazaría y la solicitud nunca
+      // se crearía. Un usuario no puede leer solicitudes de otros uid.
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
 
       // El admin solo puede marcarla como rechazada (no reabrir ni mutar otros campos).
       allow update: if isAdmin()

@@ -1,6 +1,6 @@
 import { db, auth } from './firebase.js';
 import { iniciarSesion, cerrarSesion, escucharAuth } from './auth.js';
-import { loginConGoogle, redirigirSegunRol } from './login.js';
+import { loginConGoogle, redirigirSegunRol, traducirErrorGoogle } from './login.js';
 import { escapeHTML } from './sanitizar.js';
 import {
   collection, doc, getDoc, setDoc, updateDoc,
@@ -183,9 +183,11 @@ btnGoogle?.addEventListener('click', async () => {
   try {
     await loginConGoogle();
   } catch (err) {
+    // El usuario cerró el popup a propósito: no es un error que mostrar.
     if (err?.code !== 'auth/popup-closed-by-user' &&
         err?.code !== 'auth/cancelled-popup-request') {
-      loginError.textContent = 'No se pudo iniciar sesión con Google.';
+      console.error('Error en login con Google:', err);
+      loginError.textContent = traducirErrorGoogle(err?.code);
     }
     btnGoogle.disabled = false;
   }
