@@ -1,7 +1,7 @@
 import { db } from './firebase.js';
 import { collection, doc, getDoc, getDocs, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-let TOTAL = 2000;
+let TOTAL = 100;
 
 // Mapa de estado de los números (fuente de verdad local)
 const estadoMap = new Map();

@@ -42,7 +42,7 @@ const camposComision     = document.getElementById('campos-comision');
 const chkTieneComisiones = document.getElementById('v-tiene-comisiones');
 
 // ── Estado global ─────────────────────────────────
-let totalBoletos  = 2000;
+let totalBoletos  = 100;
 let precioBoleto  = 0;
 const numerosStateMap = new Map(); // id → { estado, vendedorId }
 const unsubscribes = [];
@@ -139,7 +139,7 @@ async function cargarConfig() {
   try {
     const snap = await getDoc(CONFIG_DOC);
     if (snap.exists()) {
-      totalBoletos = snap.data().total   || 2000;
+      totalBoletos = snap.data().total   || 100;
       precioBoleto = snap.data().precio  || 0;
     }
   } catch (err) {

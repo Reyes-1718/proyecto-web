@@ -25,7 +25,7 @@ const btnMantenerSesion  = document.getElementById('btn-mantener-sesion');
 
 // ── Estado ────────────────────────────────────────
 let vendedorData  = null;
-let configData    = { total: 2000, precio: 0 };
+let configData    = { total: 100, precio: 0 };
 const unsubscribes = [];
 
 // ── Inactividad ───────────────────────────────────
@@ -183,8 +183,8 @@ async function iniciarPanelVendedor() {
   } catch (_) {}
 
   if (vBuscarInput) {
-    vBuscarInput.placeholder = `Número del 1 al ${configData.total || 2000}`;
-    vBuscarInput.max = configData.total || 2000;
+    vBuscarInput.placeholder = `Número del 1 al ${configData.total || 100}`;
+    vBuscarInput.max = configData.total || 100;
   }
 
   // Ocultar card de ganancias si el vendedor no usa comisiones
@@ -203,7 +203,7 @@ async function iniciarPanelVendedor() {
     const val = vBuscarInput?.value.trim();
     if (val) {
       const num = parseInt(val);
-      if (!isNaN(num) && num >= 1 && num <= (configData.total || 2000)) mostrarResultadoVendedor(num);
+      if (!isNaN(num) && num >= 1 && num <= (configData.total || 100)) mostrarResultadoVendedor(num);
     }
   });
   unsubscribes.push(unsubDisponibilidad);
@@ -316,7 +316,7 @@ vBuscarInput?.addEventListener('input', () => {
   }
 
   const num = parseInt(val);
-  const total = configData.total || 2000;
+  const total = configData.total || 100;
   if (isNaN(num) || num < 1 || num > total) {
     limpiarListenerNumero();
     vResultadoDiv.innerHTML = `<p class="busqueda-error">Número inválido (1 – ${total})</p>`;
