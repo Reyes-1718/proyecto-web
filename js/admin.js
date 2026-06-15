@@ -1,9 +1,10 @@
 import { db, auth } from './firebase.js';
 import { iniciarSesion, cerrarSesion, escucharAuth, crearCuentaVendedor } from './auth.js';
+import { loginConGoogle, redirigirSegunRol } from './login.js';
 import { validarReduccionBoletos } from './reglas.js';
 import { escapeHTML } from './sanitizar.js';
 import {
-  collection, doc, setDoc, getDoc, updateDoc, addDoc,
+  collection, doc, setDoc, getDoc, updateDoc, deleteDoc, addDoc,
   onSnapshot, query, where, serverTimestamp, runTransaction, increment
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
@@ -12,6 +13,7 @@ const loginSection       = document.getElementById('login-section');
 const adminSection       = document.getElementById('admin-section');
 const loginForm          = document.getElementById('login-form');
 const loginError         = document.getElementById('login-error');
+const btnGoogle          = document.getElementById('btn-google');
 const logoutBtn          = document.getElementById('logout-btn');
 const buscarInput        = document.getElementById('buscar-numero');
 const resultadoDiv       = document.getElementById('resultado-busqueda');
@@ -40,6 +42,8 @@ const tituloModalVendedor = document.getElementById('modal-vendedor-titulo');
 const camposAuth         = document.getElementById('campos-auth');
 const camposComision     = document.getElementById('campos-comision');
 const chkTieneComisiones = document.getElementById('v-tiene-comisiones');
+const solicitudesLista   = document.getElementById('solicitudes-lista');
+const badgeSolicitudes   = document.getElementById('badge-solicitudes');
 
 // ── Estado global ─────────────────────────────────
 let totalBoletos  = 100;
@@ -47,6 +51,7 @@ let precioBoleto  = 0;
 const numerosStateMap = new Map(); // id → { estado, vendedorId }
 const unsubscribes = [];
 let editandoVendedorUid = null; // null = crear, uid = editar
+let aprobandoSolicitud  = null; // null = no aprobando; {uid,email,nombre} = aprobar solicitud
 
 const CONFIG_DOC = doc(db, 'config', 'sorteo');
 
@@ -236,14 +241,18 @@ const EMAIL_REGEX = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
 
 escucharAuth(async (user) => {
   if (user) {
-    // Verificar si es vendedor → redirigir a su panel
+    // Verificar el rol real contra Firestore. Solo quien existe en
+    // admins/{uid} ve el panel; cualquier otra cuenta (vendedor, o
+    // un usuario nuevo de Google sin rol) se enruta a donde corresponde.
+    // La protección real está en las reglas; esto es UX + evita mostrar
+    // el panel a quien no es admin (ver §15 de google-notas.md).
     try {
-      const vendedorSnap = await getDoc(doc(db, 'vendedores', user.uid));
-      if (vendedorSnap.exists()) {
-        window.location.href = 'vendedor.html';
+      const adminSnap = await getDoc(doc(db, 'admins', user.uid));
+      if (!adminSnap.exists()) {
+        await redirigirSegunRol(user, { current: 'admin' });
         return;
       }
-    } catch (_) { /* sin conexión: continuar como admin */ }
+    } catch (_) { /* sin conexión: continuar; las reglas siguen protegiendo */ }
 
     loginSection.classList.add('hidden');
     adminSection.classList.remove('hidden');
@@ -258,6 +267,7 @@ escucharAuth(async (user) => {
     loginError.textContent = '';
     const btn = loginForm?.querySelector('button[type="submit"]');
     if (btn) { btn.disabled = false; btn.textContent = 'Ingresar'; }
+    if (btnGoogle) btnGoogle.disabled = false;
   }
 });
 
@@ -292,6 +302,21 @@ loginForm?.addEventListener('submit', async (e) => {
 
 logoutBtn?.addEventListener('click', async () => {
   await cerrarSesion();
+});
+
+// Login con Google. El enrutamiento por rol lo resuelve escucharAuth.
+btnGoogle?.addEventListener('click', async () => {
+  loginError.textContent = '';
+  btnGoogle.disabled = true;
+  try {
+    await loginConGoogle();
+  } catch (err) {
+    if (err?.code !== 'auth/popup-closed-by-user' &&
+        err?.code !== 'auth/cancelled-popup-request') {
+      loginError.textContent = 'No se pudo iniciar sesión con Google.';
+    }
+    btnGoogle.disabled = false;
+  }
 });
 
 // ── Búsqueda de número ────────────────────────────
@@ -561,6 +586,75 @@ async function toggleEstadoVendedor(uid, estadoActual) {
   }
 }
 
+// ── Solicitudes de acceso (Google login) ──────────
+// Todos los datos provienen del usuario (nombre/email vía Google) y se
+// escapan antes de interpolarse para evitar XSS almacenado.
+function renderizarSolicitudes(solicitudes) {
+  if (!solicitudesLista) return;
+
+  const count = solicitudes.length;
+  if (badgeSolicitudes) {
+    badgeSolicitudes.textContent = count;
+    badgeSolicitudes.classList.toggle('hidden', count === 0);
+  }
+
+  if (count === 0) {
+    solicitudesLista.innerHTML = '<p class="no-data">No hay solicitudes pendientes.</p>';
+    return;
+  }
+
+  solicitudesLista.innerHTML = solicitudes.map(({ uid, data }) => `
+    <div class="solicitud-card">
+      <div class="solicitud-info">
+        <div class="solicitud-nombre">${escapeHTML(data.nombre) || 'Usuario sin nombre'}</div>
+        <div class="solicitud-email">${escapeHTML(data.email) || 'Sin email'}</div>
+        <div class="solicitud-uid">UID: ${escapeHTML(uid)}</div>
+      </div>
+      <div class="solicitud-acciones">
+        <button class="btn-primary btn-sm btn-aprobar-sol"
+          data-uid="${escapeHTML(uid)}"
+          data-nombre="${escapeHTML(data.nombre)}"
+          data-email="${escapeHTML(data.email)}">Aprobar como vendedor</button>
+        <button class="btn-ghost btn-sm btn-copiar-uid" data-uid="${escapeHTML(uid)}">Copiar UID</button>
+        <button class="btn-ghost btn-sm danger btn-rechazar-sol" data-uid="${escapeHTML(uid)}">Rechazar</button>
+      </div>
+    </div>
+  `).join('');
+
+  solicitudesLista.querySelectorAll('.btn-aprobar-sol').forEach(btn => {
+    btn.addEventListener('click', () => abrirModalAprobarSolicitud({
+      uid: btn.dataset.uid, nombre: btn.dataset.nombre, email: btn.dataset.email
+    }));
+  });
+  solicitudesLista.querySelectorAll('.btn-copiar-uid').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.uid);
+        alert('UID copiado. Creá admins/{uid} manualmente en Firebase Console.');
+      } catch (_) {
+        alert('No se pudo copiar. UID: ' + btn.dataset.uid);
+      }
+    });
+  });
+  solicitudesLista.querySelectorAll('.btn-rechazar-sol').forEach(btn => {
+    btn.addEventListener('click', () => rechazarSolicitud(btn.dataset.uid));
+  });
+}
+
+async function rechazarSolicitud(uid) {
+  if (!confirm('¿Rechazar esta solicitud de acceso?')) return;
+  try {
+    // Se marca como rechazada (las reglas solo permiten esta transición).
+    await updateDoc(doc(db, 'solicitudesAcceso', uid), {
+      estado: 'rechazada',
+      reviewedAt: serverTimestamp(),
+      reviewedBy: auth.currentUser.uid
+    });
+  } catch (err) {
+    alert('Error al rechazar: ' + err.message);
+  }
+}
+
 // ── Modal de vendedor ─────────────────────────────
 btnNuevoVendedor?.addEventListener('click', () => abrirModalCrear());
 
@@ -605,9 +699,31 @@ async function abrirModalEditar(uid) {
   modalVendedor?.classList.remove('hidden');
 }
 
+// Aprobar una solicitud reutiliza el modal de vendedor para no perder la
+// configuración rica (comisiones / modo de venta). A diferencia de "crear",
+// NO se generan credenciales: la cuenta ya existe en Auth vía Google, así que
+// se ocultan los campos de email/contraseña y se usará el UID de la solicitud.
+function abrirModalAprobarSolicitud(solicitud) {
+  editandoVendedorUid = null;
+  aprobandoSolicitud  = solicitud;
+  formVendedor?.reset();
+  if (errorVendedor)       errorVendedor.textContent = '';
+  if (tituloModalVendedor) tituloModalVendedor.textContent = 'Aprobar como vendedor';
+  if (btnSubmitVendedor)   btnSubmitVendedor.textContent = 'Aprobar vendedor';
+  if (camposAuth)          camposAuth.classList.add('hidden');
+  if (camposComision)      camposComision.classList.remove('hidden');
+  if (chkTieneComisiones)  chkTieneComisiones.checked = true;
+
+  const inputNombre = document.getElementById('v-nombre');
+  if (inputNombre) inputNombre.value = solicitud.nombre || '';
+
+  modalVendedor?.classList.remove('hidden');
+}
+
 function cerrarModalVendedor() {
   modalVendedor?.classList.add('hidden');
   editandoVendedorUid = null;
+  aprobandoSolicitud  = null;
   formVendedor?.reset();
   if (errorVendedor) errorVendedor.textContent = '';
 }
@@ -650,7 +766,21 @@ formVendedor?.addEventListener('submit', async (e) => {
   btnSubmitVendedor.textContent = 'Guardando...';
 
   try {
-    if (editandoVendedorUid) {
+    if (aprobandoSolicitud) {
+      // Aprobar solicitud: la cuenta Auth ya existe (Google). Se crea
+      // vendedores/{uid} con el UID de la solicitud y se elimina la solicitud.
+      const uid = aprobandoSolicitud.uid;
+      await setDoc(doc(db, 'vendedores', uid), {
+        nombre, contacto, email: aprobandoSolicitud.email || '',
+        estado: 'activo',
+        tieneComisiones, comisionTipo, comisionValor,
+        requiereAprobacion, ventaDirecta,
+        fechaCreacion: serverTimestamp(),
+        totalVendidos: 0,
+        totalGanancias: 0
+      });
+      await deleteDoc(doc(db, 'solicitudesAcceso', uid));
+    } else if (editandoVendedorUid) {
       // Editar vendedor existente (sin cambiar credenciales Auth)
       await updateDoc(doc(db, 'vendedores', editandoVendedorUid), {
         nombre, contacto, tieneComisiones, comisionTipo, comisionValor,
@@ -745,6 +875,18 @@ function iniciarPanel() {
     renderizarVendedores(vendedores);
   });
   unsubscribes.push(unsubVendedores);
+
+  // Listener: solicitudes de acceso pendientes (usuarios de Google sin rol)
+  const qSolicitudes = query(
+    collection(db, 'solicitudesAcceso'),
+    where('estado', '==', 'pendiente')
+  );
+  const unsubSolicitudes = onSnapshot(qSolicitudes, (snapshot) => {
+    const solicitudes = [];
+    snapshot.forEach(d => solicitudes.push({ uid: d.id, data: d.data() }));
+    renderizarSolicitudes(solicitudes);
+  });
+  unsubscribes.push(unsubSolicitudes);
 }
 
 function traducirError(code) {

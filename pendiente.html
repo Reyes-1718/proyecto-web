@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- CSP: incluye los orígenes necesarios para el login con Google (popup + iframe de Firebase Auth). -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://*.googleusercontent.com; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com; frame-src https://rifa-digital-85131.firebaseapp.com https://accounts.google.com https://apis.google.com; base-uri 'self'; object-src 'none'; form-action 'self'">
+  <title>Acceso pendiente — Rifa 2025</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Josefin+Sans:wght@300;400;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+  <section class="login-section">
+    <div class="login-card">
+      <p class="login-pretitle">Cuenta registrada</p>
+      <h1 class="login-title">Acceso pendiente</h1>
+
+      <p class="modal-desc" style="text-align:center">
+        Tu cuenta se registró correctamente.<br>
+        Un administrador debe aprobar tu acceso como vendedor.
+      </p>
+      <p class="modal-desc" style="text-align:center; font-size:0.75rem">
+        Si necesitás acceso como administrador, tu UID debe agregarse
+        manualmente en Firebase Console.
+      </p>
+
+      <button id="btn-logout" type="button" class="btn-primary">Cerrar sesión</button>
+      <a href="index.html" class="back-link">← Volver al sorteo</a>
+    </div>
+  </section>
+
+  <script type="module">
+    import { auth } from './js/firebase.js';
+    import {
+      signOut, onAuthStateChanged
+    } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+    // Si no hay sesión, no tiene sentido permanecer aquí.
+    onAuthStateChanged(auth, (user) => {
+      if (!user) window.location.href = 'index.html';
+    });
+
+    document.getElementById('btn-logout')?.addEventListener('click', async () => {
+      await signOut(auth);
+      window.location.href = 'index.html';
+    });
+  </script>
+</body>
+</html>

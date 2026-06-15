@@ -1,5 +1,6 @@
 import { db, auth } from './firebase.js';
 import { iniciarSesion, cerrarSesion, escucharAuth } from './auth.js';
+import { loginConGoogle, redirigirSegunRol } from './login.js';
 import { escapeHTML } from './sanitizar.js';
 import {
   collection, doc, getDoc, setDoc, updateDoc,
@@ -11,6 +12,7 @@ const loginSection       = document.getElementById('login-section');
 const vendedorSection    = document.getElementById('vendedor-section');
 const loginForm          = document.getElementById('login-form');
 const loginError         = document.getElementById('login-error');
+const btnGoogle          = document.getElementById('btn-google');
 const logoutBtn          = document.getElementById('logout-btn');
 const vNombreDisplay     = document.getElementById('v-nombre-display');
 const vBuscarInput       = document.getElementById('v-buscar-numero');
@@ -110,8 +112,9 @@ escucharAuth(async (user) => {
     try {
       const snap = await getDoc(doc(db, 'vendedores', user.uid));
       if (!snap.exists() || snap.data().estado !== 'activo') {
-        await cerrarSesion();
-        loginError.textContent = 'Tu cuenta no está habilitada como vendedor.';
+        // No es vendedor activo: enrutar por rol (admin → su panel; sin rol
+        // o desactivado → pendiente.html, creando la solicitud si hace falta).
+        await redirigirSegunRol(user, { current: 'vendedor' });
         return;
       }
       vendedorData = { uid: user.uid, ...snap.data() };
@@ -136,6 +139,7 @@ escucharAuth(async (user) => {
     loginError.textContent = '';
     const btn = loginForm?.querySelector('button[type="submit"]');
     if (btn) { btn.disabled = false; btn.textContent = 'Ingresar'; }
+    if (btnGoogle) btnGoogle.disabled = false;
   }
 });
 
@@ -170,6 +174,21 @@ loginForm?.addEventListener('submit', async (e) => {
 
 logoutBtn?.addEventListener('click', async () => {
   await cerrarSesion();
+});
+
+// Login con Google. El enrutamiento por rol lo resuelve escucharAuth.
+btnGoogle?.addEventListener('click', async () => {
+  loginError.textContent = '';
+  btnGoogle.disabled = true;
+  try {
+    await loginConGoogle();
+  } catch (err) {
+    if (err?.code !== 'auth/popup-closed-by-user' &&
+        err?.code !== 'auth/cancelled-popup-request') {
+      loginError.textContent = 'No se pudo iniciar sesión con Google.';
+    }
+    btnGoogle.disabled = false;
+  }
 });
 
 // ── Panel principal ───────────────────────────────
