@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- CSP: restringe orígenes de scripts, estilos y conexiones para mitigar XSS -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; base-uri 'self'; object-src 'none'; form-action 'self'">
+  <!-- CSP: restringe orígenes de scripts, estilos y conexiones para mitigar XSS.
+       Incluye los orígenes del login con Google (popup + iframe de Firebase Auth). -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://*.googleusercontent.com; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com; frame-src https://rifa-digital-85131.firebaseapp.com https://accounts.google.com https://apis.google.com; base-uri 'self'; object-src 'none'; form-action 'self'">
   <title>Panel Admin — Rifa 2025</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -33,6 +34,8 @@
         <p class="login-error" id="login-error" role="alert"></p>
         <button type="submit" class="btn-primary">Ingresar</button>
       </form>
+      <!-- El panel admin usa solo email/contraseña: los administradores se
+           crean a mano en Firebase Console (admins/{uid}), no por Google. -->
       <a href="index.html" class="back-link">← Volver al sorteo</a>
     </div>
   </section>
@@ -81,6 +84,10 @@
           Pendientes
           <span class="tab-badge hidden" id="badge-pendientes">0</span>
         </button>
+        <button class="tab-btn" data-tab="solicitudes">
+          Solicitudes
+          <span class="tab-badge hidden" id="badge-solicitudes">0</span>
+        </button>
         <button class="tab-btn" data-tab="vendedores">Vendedores</button>
         <button class="tab-btn" data-tab="config">Configuración</button>
       </nav>
@@ -100,6 +107,21 @@
         <div class="admin-buscador">
           <h2 class="section-title">Boletos pendientes de aprobación</h2>
           <div id="lista-pendientes" class="lista-pendientes">
+            <p class="no-data">Cargando...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Tab: Solicitudes de acceso ── -->
+      <div class="tab-panel hidden" id="panel-solicitudes">
+        <div class="admin-buscador">
+          <h2 class="section-title">Solicitudes de acceso</h2>
+          <p class="config-help" style="margin-bottom:var(--space-md)">
+            Usuarios que entraron con Google y todavía no tienen rol.
+            Podés aprobarlos como vendedor, rechazarlos o copiar su UID para
+            crearlos como administrador manualmente en Firebase Console.
+          </p>
+          <div id="solicitudes-lista" class="lista-pendientes">
             <p class="no-data">Cargando...</p>
           </div>
         </div>

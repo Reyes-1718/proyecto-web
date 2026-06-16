@@ -141,6 +141,105 @@
   color: var(--accent-gold);
 }
 
+/* ── Divisor "o" del login ───────────────────── */
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: var(--space-md) 0;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ── Botón de Google ─────────────────────────── */
+.btn-google {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 13px;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, transform 0.15s;
+}
+
+.btn-google:hover {
+  border-color: var(--accent-gold);
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
+}
+
+.btn-google:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-google svg {
+  flex-shrink: 0;
+}
+
+/* ── Tarjetas de solicitud de acceso ─────────── */
+.solicitud-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+
+.solicitud-info {
+  flex: 1;
+  min-width: 200px;
+}
+
+.solicitud-nombre {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.solicitud-email {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.solicitud-uid {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  word-break: break-all;
+  margin-top: 4px;
+}
+
+.solicitud-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
 /* ── Admin panel ─────────────────────────────── */
 .admin-section {
   min-height: 100vh;
