@@ -1,5 +1,8 @@
 # Configuración local de herramientas (no debe versionarse)
 .claude/settings.local.json
+.claude/
+CLAUDE.md
+LEEME.md
 
 # Notas / prompts locales
 pront.md
