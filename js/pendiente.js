@@ -12,7 +12,7 @@ import {
   signOut, onAuthStateChanged
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import {
-  doc, getDoc
+  doc, getDoc, onSnapshot
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 // Ajusta el mensaje de la página según el estado real de la solicitud.
@@ -42,6 +42,22 @@ async function mostrarEstadoSolicitud(uid) {
     'Si creés que es un error, contactá al organizador del sorteo.';
 }
 
+// Escucha EN VIVO la asignación de rol mientras el usuario espera en esta
+// página. Si el admin lo aprueba (crea vendedores/{uid} activo) o lo agrega
+// como admin, redirige sin que tenga que cerrar sesión y volver a entrar.
+// Las reglas permiten al usuario leer su propio vendedores/{uid} y admins/{uid}.
+function escucharAprobacion(uid) {
+  onSnapshot(doc(db, 'vendedores', uid), (snap) => {
+    if (snap.exists() && snap.data().estado === 'activo') {
+      window.location.href = 'vendedor.html';
+    }
+  }, () => { /* sin permiso o sin doc todavía: se ignora */ });
+
+  onSnapshot(doc(db, 'admins', uid), (snap) => {
+    if (snap.exists()) window.location.href = 'admin.html';
+  }, () => { /* idem */ });
+}
+
 // Si no hay sesión, no tiene sentido permanecer aquí.
 onAuthStateChanged(auth, (user) => {
   if (!user) {
@@ -49,6 +65,7 @@ onAuthStateChanged(auth, (user) => {
     return;
   }
   mostrarEstadoSolicitud(user.uid);
+  escucharAprobacion(user.uid);
 });
 
 document.getElementById('btn-logout')?.addEventListener('click', async () => {
